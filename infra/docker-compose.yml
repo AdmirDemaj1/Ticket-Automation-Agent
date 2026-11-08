@@ -1,0 +1,92 @@
+name: mtj
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: mtj
+      POSTGRES_PASSWORD: mtj
+      POSTGRES_DB: mtj
+    ports: ['127.0.0.1:${POSTGRES_HOST_PORT:-5433}:5432']
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U mtj -d mtj']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    ports: ['127.0.0.1:6379:6379']
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  s3:
+    # S3-compatible object storage for local dev (MinIO images are no longer published on Docker Hub).
+    image: chrislusf/seaweedfs:4.50
+    command: server -dir=/data -s3 -s3.port=9000 -s3.config=/etc/seaweedfs/s3.json -ip.bind=0.0.0.0
+    ports: ['127.0.0.1:9000:9000']
+    volumes:
+      - s3data:/data
+      - ./seaweedfs/s3.json:/etc/seaweedfs/s3.json:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -q -O /dev/null http://localhost:9333/cluster/status || exit 1']
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  api:
+    build: { context: .., dockerfile: apps/api/Dockerfile }
+    env_file: [.env]
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    ports: ['127.0.0.1:3000:3000']
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://localhost:3000/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  agent:
+    build: { context: ../apps/agent }
+    env_file: [.env]
+    depends_on:
+      postgres: { condition: service_healthy }
+    # Internal service. Bound to localhost only for local debugging; never expose publicly.
+    ports: ['127.0.0.1:8000:8000']
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'python',
+          '-c',
+          "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/healthz').status==200 else 1)",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  web:
+    build: { context: .., dockerfile: apps/web/Dockerfile }
+    environment:
+      API_PROXY_TARGET: http://api:3000
+    depends_on:
+      api: { condition: service_healthy }
+    ports: ['127.0.0.1:5173:5173']
+
+volumes:
+  pgdata:
+  s3data:

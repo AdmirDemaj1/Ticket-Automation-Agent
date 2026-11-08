@@ -1,0 +1,192 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- users & auth ----------
+
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  email        String   @unique
+  name         String
+  passwordHash String?  @map("password_hash")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  refreshTokens RefreshToken[]
+  connections   Connection[]
+  runs          Run[]
+  auditLogs     AuditLog[]
+
+  @@map("users")
+}
+
+/// Opaque refresh tokens, stored as SHA-256 hashes. Rotated on every use; reuse of a
+/// rotated token revokes the whole family (stolen-token detection).
+model RefreshToken {
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String    @map("user_id") @db.Uuid
+  tokenHash  String    @unique @map("token_hash")
+  familyId   String    @map("family_id") @db.Uuid
+  expiresAt  DateTime  @map("expires_at")
+  revokedAt  DateTime? @map("revoked_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([familyId])
+  @@map("refresh_tokens")
+}
+
+// ---------- connections (token vault) ----------
+
+enum Provider {
+  jira
+  github
+  gitlab
+  msgraph
+  spinach
+}
+
+enum ConnectionStatus {
+  active
+  needs_reauth
+  revoked
+}
+
+model Connection {
+  id                String           @id @default(uuid()) @db.Uuid
+  userId            String           @map("user_id") @db.Uuid
+  provider          Provider
+  status            ConnectionStatus @default(active)
+  externalAccountId String?          @map("external_account_id")
+  scopes            String[]
+  /// AES-256-GCM, format "v1:<keyId>:<nonce>|<ciphertext>|<tag>" (base64). Never logged.
+  accessTokenEnc    String?          @map("access_token_enc")
+  refreshTokenEnc   String?          @map("refresh_token_enc")
+  expiresAt         DateTime?        @map("expires_at")
+  meta              Json             @default("{}")
+  createdAt         DateTime         @default(now()) @map("created_at")
+  updatedAt         DateTime         @updatedAt @map("updated_at")
+  revokedAt         DateTime?        @map("revoked_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, provider])
+  @@map("connections")
+}
+
+// ---------- runs ----------
+
+enum RunStatus {
+  queued
+  running
+  awaiting_review
+  creating_tickets
+  completed
+  failed
+  cancelled
+}
+
+model Run {
+  id            String    @id @default(uuid()) @db.Uuid
+  userId        String    @map("user_id") @db.Uuid
+  status        RunStatus @default(queued)
+  /// meeting ref, repo, branch, jira project, sprint, options. No secrets.
+  input         Json
+  graphThreadId String?   @map("graph_thread_id")
+  error         String?
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  events       RunEvent[]
+  files        RunFile[]
+  draftTickets DraftTicket[]
+
+  @@index([userId, createdAt])
+  @@map("runs")
+}
+
+model RunEvent {
+  id      BigInt   @id @default(autoincrement())
+  runId   String   @map("run_id") @db.Uuid
+  ts      DateTime @default(now())
+  step    String
+  level   String
+  message String
+  data    Json     @default("{}")
+
+  run Run @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId, id])
+  @@map("run_events")
+}
+
+enum RunFileKind {
+  screenshot
+  transcript
+}
+
+model RunFile {
+  id         String      @id @default(uuid()) @db.Uuid
+  runId      String      @map("run_id") @db.Uuid
+  kind       RunFileKind
+  storageKey String      @map("storage_key")
+  mime       String
+  sha256     String
+  position   Int         @default(0)
+  caption    String?
+  createdAt  DateTime    @default(now()) @map("created_at")
+
+  run Run @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId])
+  @@map("run_files")
+}
+
+model DraftTicket {
+  id                 String   @id @default(uuid()) @db.Uuid
+  runId              String   @map("run_id") @db.Uuid
+  position           Int
+  type               String
+  title              String
+  description        String
+  acceptanceCriteria String[] @map("acceptance_criteria")
+  estimate           String?
+  labels             String[]
+  relatedFiles       String[] @map("related_files")
+  selected           Boolean  @default(true)
+  edited             Boolean  @default(false)
+  jiraKey            String?  @map("jira_key")
+  jiraUrl            String?  @map("jira_url")
+
+  run Run @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId, position])
+  @@map("draft_tickets")
+}
+
+// ---------- audit ----------
+
+model AuditLog {
+  id     BigInt   @id @default(autoincrement())
+  userId String?  @map("user_id") @db.Uuid
+  action String
+  target String?
+  ts     DateTime @default(now())
+  ip     String?
+  meta   Json     @default("{}")
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId, ts])
+  @@index([action, ts])
+  @@map("audit_log")
+}

@@ -1,0 +1,22 @@
+{
+  "name": "@mtj/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Shared request/response schemas (zod). Source of truth for API types used by the web app.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit",
+    "test": "echo 'no tests'"
+  },
+  "peerDependencies": {
+    "zod": "^4"
+  },
+  "devDependencies": {
+    "typescript": "~5.9.3",
+    "zod": "^4.6.7"
+  }
+}
