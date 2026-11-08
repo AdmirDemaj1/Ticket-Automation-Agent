@@ -2,7 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module';
-import { AppConfig } from './config/config.module';
+import { AppConfig } from './config/app-config';
 import { setupApp } from './setup-app';
 
 async function bootstrap(): Promise<void> {

@@ -9,7 +9,7 @@ The full build spec is in [Claude-Reference.md](Claude-Reference.md). Design dec
 | Milestone | State |
 |---|---|
 | M0 Skeleton (monorepo, Compose, CI, healthchecks) | Done |
-| M1 Auth + token vault | Next |
+| M1 Auth + token vault | Done |
 | M2 to M6 | Not started |
 
 ## Layout

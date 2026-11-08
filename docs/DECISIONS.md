@@ -46,3 +46,27 @@ Port 5432 is often taken on dev machines. Override with `POSTGRES_HOST_PORT`. On
 ## D8. Shared contracts as zod schemas (2026-11-08, M0)
 
 `packages/contracts` holds zod schemas and inferred TS types for request/response bodies. The web app uses them for forms and typing. The API validates with class-validator DTOs (spec requirement) and publishes OpenAPI at `/docs` in non-production. DTOs and contracts are kept in sync by the API e2e tests, which assert response shapes.
+
+## D9. JWT guard without passport-jwt (2026-11-08, M1)
+
+Access tokens are verified by a small global `JwtAuthGuard` (`@nestjs/jwt`, HS256 only, algorithm pinned on sign and verify). Every route requires auth unless marked `@Public()`, so a new route is protected by default. Passport stays an option for the OAuth flows in M3+, where its strategies help.
+
+## D10. Sessions: short access token + rotating refresh cookie (2026-11-08, M1)
+
+- Access token: JWT, 15 min (`JWT_ACCESS_TTL_SECONDS`), kept in browser memory only.
+- Refresh token: 32 random bytes in an `httpOnly`, `SameSite=Strict`, `Secure` (production) cookie, path `/` (the browser sees the API under `/api` through the proxy, so a narrower path would not match). Stored only as a SHA-256 hash.
+- Rotated on every use. A replay of an already-rotated token revokes the whole token family and is audited (`auth.refresh_reuse_detected`).
+- Grace window (`REFRESH_REUSE_GRACE_SECONDS`, default 10 s): a replay shortly after rotation gets a 401 but does not revoke the family. Without it, two tabs refreshing at the same moment would log the user out everywhere. The web client shares one in-flight refresh per tab and retries once after 250 ms to pick up a cookie rotated by another tab.
+- `/auth/refresh` and `/auth/logout` also reject a foreign `Origin` header (CSRF defense in depth).
+
+## D11. Passwords: argon2id, generic login errors (2026-11-08, M1)
+
+Passwords are hashed with argon2id (library defaults), 12 to 128 characters. Login returns the same message for unknown email and wrong password and runs a dummy hash verify for unknown emails to keep timing similar. Registration returns `409` for an existing email. This reveals whether an email is registered; we accept it for the MVP because registration is rate-limited (`AUTH_RATE_LIMIT_PER_MIN`, default 10/min per IP). Revisit with email verification.
+
+## D12. Token vault details (2026-11-08, M1)
+
+- Stored format: `v1:<keyId>:<nonce>|<ciphertext>|<tag>`, each part standard base64, AES-256-GCM, fresh 12-byte nonce per value.
+- Additional authenticated data is `userId:provider`, so a ciphertext copied to another user's row does not decrypt.
+- Rotation: set a new `TOKEN_ENC_KEY` + `TOKEN_ENC_KEY_ID` and move the old key to `TOKEN_ENC_OLD_KEYS` (`k1:base64`). Old values still decrypt and are re-encrypted with the current key the next time they are read (`ConnectionsService.getTokens`).
+- Connection `status` (`active | needs_reauth | revoked`) is an addition to the spec's data model, needed for the spec's "mark the connection needs_reauth" rule. Disconnect wipes the ciphertexts and keeps the row (revoked) for audit.
+- `ConnectionsService` has no method that reads a connection without a `userId`.
