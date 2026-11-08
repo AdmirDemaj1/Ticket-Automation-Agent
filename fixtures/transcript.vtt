@@ -1,0 +1,51 @@
+WEBVTT
+
+NOTE Design review: demo-app Login and Dashboard. Fictional meeting for tests.
+
+00:00:02.000 --> 00:00:09.500
+<v Anna Rossi>Okay, let's go through the two Figma screens. First one is the login page.
+
+00:00:10.000 --> 00:00:19.000
+<v Marco Bianchi>Main thing on login: users keep asking how to reset their password. We need a "Forgot password?" link under the password field.
+
+00:00:19.500 --> 00:00:25.000
+<v Anna Rossi>Agreed. It should go to a reset page where they enter their email. Can we get that this sprint?
+
+00:00:25.500 --> 00:00:30.000
+<v Luca Verdi>Yes, the backend already has a reset endpoint, it's just the UI.
+
+00:00:30.500 --> 00:00:38.000
+<v Marco Bianchi>The show and hide password toggle in the design, do we have that already?
+
+00:00:38.500 --> 00:00:43.000
+<v Luca Verdi>I think we added it last sprint, I'm not a hundred percent sure.
+
+00:00:43.500 --> 00:00:54.000
+<v Anna Rossi>Also errors. Right now a wrong password shows a red banner at the top. The design puts the error inline, right under the field, in red text.
+
+00:00:54.500 --> 00:01:00.000
+<v Marco Bianchi>Inline errors, yes. Keep the banner only for network errors.
+
+00:01:01.000 --> 00:01:08.000
+<v Anna Rossi>Second screen, the dashboard. The orders table stays as it is.
+
+00:01:08.500 --> 00:01:20.000
+<v Marco Bianchi>We need a date range filter on top of the table: last 7 days, 30 days, 90 days, and a custom range with two date pickers. Default stays 7 days.
+
+00:01:20.500 --> 00:01:28.000
+<v Luca Verdi>Today the API call is hardcoded to 7 days, so that needs a parameter.
+
+00:01:28.500 --> 00:01:37.000
+<v Anna Rossi>And an "Export CSV" button next to the filter. It exports exactly what's in the table for the selected range. High priority, finance asked twice.
+
+00:01:37.500 --> 00:01:45.000
+<v Marco Bianchi>One more: when there are no orders the table is just empty. Add an empty state with a short message.
+
+00:01:45.500 --> 00:01:52.000
+<v Anna Rossi>Should we also do dark mode?
+
+00:01:52.500 --> 00:01:58.000
+<v Marco Bianchi>Not now, let's park dark mode for a later sprint.
+
+00:01:58.500 --> 00:02:05.000
+<v Anna Rossi>Okay. So: forgot password, inline errors, date range filter, CSV export, empty state. Thanks everyone.

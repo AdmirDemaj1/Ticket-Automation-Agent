@@ -1,0 +1,7 @@
+{
+  "name": "demo-app",
+  "version": "0.3.0",
+  "private": true,
+  "scripts": { "dev": "vite", "build": "vite build" },
+  "dependencies": { "react": "^18.3.1", "react-dom": "^18.3.1" }
+}
