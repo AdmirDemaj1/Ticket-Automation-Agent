@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, ExternalLink } from 'lucide-react';
 import { useState, type KeyboardEvent, type ReactNode } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { CodeFitPanel } from '@/components/run/CodeFitPanel';
 import { DraftEditor } from '@/components/run/DraftEditor';
 import { StatusBadge } from '@/components/run/StatusBadge';
 import { Badge, type BadgeProps } from '@/components/ui/badge';
@@ -90,8 +91,13 @@ export function RunDetailPage() {
       <Timeline events={stream.events} state={stream.state} />
 
       {run.status === 'completed' && <CreatedList detail={detail.data} />}
-      {detail.data.drafts.length > 0 && (
-        <Review key={run.status} detail={detail.data} onReject={() => action.mutate('reject')} />
+      {detail.data.review_stage === 'code_fit' && <CodeFitPanel detail={detail.data} />}
+      {(detail.data.drafts.length > 0 || detail.data.review_stage === 'code_fit') && (
+        <Review
+          key={`${run.status}-${detail.data.review_stage}`}
+          detail={detail.data}
+          onReject={() => action.mutate('reject')}
+        />
       )}
     </section>
   );
@@ -182,8 +188,8 @@ const TABS: { id: Tab; label: string }[] = [
 ];
 
 function Review({ detail, onReject }: { detail: RunDetail; onReject: () => void }) {
-  const [tab, setTab] = useState<Tab>('drafts');
-  const reviewing = detail.run.status === 'awaiting_review';
+  const [tab, setTab] = useState<Tab>(detail.review_stage === 'code_fit' ? 'code' : 'drafts');
+  const reviewing = detail.run.status === 'awaiting_review' && detail.review_stage === 'drafts';
 
   function onKey(e: KeyboardEvent<HTMLDivElement>) {
     const i = TABS.findIndex((t) => t.id === tab);
@@ -222,9 +228,14 @@ function Review({ detail, onReject }: { detail: RunDetail; onReject: () => void 
       <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>
         {tab === 'summary' && <SummaryTab detail={detail} />}
         {tab === 'code' && <CodeTab detail={detail} />}
-        {tab === 'drafts' && (
-          <DraftsTab detail={detail} reviewing={reviewing} onReject={onReject} />
-        )}
+        {tab === 'drafts' &&
+          (detail.drafts.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No drafts: the code check stopped the run before drafting.
+            </p>
+          ) : (
+            <DraftsTab detail={detail} reviewing={reviewing} onReject={onReject} />
+          ))}
       </div>
     </div>
   );

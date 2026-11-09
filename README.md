@@ -41,6 +41,8 @@ Open http://127.0.0.1:5173 and check **Status**. With the defaults:
 2. The run page shows live progress, then the review tabs: *Summary by screen*, *Code analysis* (status, evidence, confidence) and *Draft tickets*.
 3. Edit drafts, **Save edits**, choose which to include, then **Approve & create in Jira**. Every issue gets the labels `mtj-<run id>` and `mtj-<run id>-<draft id>`, so approving twice never makes duplicates.
 
+If the code doesn't seem to match the meeting (for example the wrong repository or branch), the run stops before drafting and offers to re-run on another repository, reusing the meeting analysis.
+
 A run paused for review survives a backend restart. A run that failed, or was interrupted by a restart mid-step, can be **retried** from its last completed step.
 
 ## Connect real providers

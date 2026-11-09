@@ -100,6 +100,16 @@ Images are checked by magic bytes, then decoded with Pillow (pixel-count limit),
 
 `services/search.py` greps the fetched files for each requirement's words (4+ letters, minus common words) and ranks lines by how many different words they contain, keeping 8 per requirement. The hits go to `compare_with_code` as a `<search_hits>` block. The prompt (now `compare_with_code.v2`) says they are pointers, not evidence; evidence is still checked against the files that were read. Which files to fetch is still decided by path ranking plus the LLM plan; following imports is a possible later improvement.
 
+## D18. Code-fit gate: no drafts when the code does not match the meeting (2026-11-09, after M3)
+
+First real run: a mobile-onboarding meeting against a web fleet-admin repository gave 14 of 14 requirements `unclear`/`low`, yet 14 tickets were drafted and approved. Now:
+
+- `compare_with_code` (prompt v3) also returns `repository_fit`: `matches`, `partly`, `does_not_match` or `cannot_tell`, with a reason.
+- A new node, `check_code_fit` (no LLM), computes how many requirements were checked with confidence (status other than `unclear`, confidence other than `low`). The run goes on to drafting only if code was read, the verdict is not `does_not_match`, and either at least 25% were checked with confidence or the verdict is `matches`.
+- Otherwise the graph pauses in `code_fit_review` (a second `interrupt`) **before** `draft_tickets`, so no drafts and no LLM drafting cost. The run status is `awaiting_review` (no new status), and `review_stage` in the run detail says which pause it is (`code_fit` or `drafts`). Approve is refused unless the stage is `drafts`.
+- The user can **re-run with another repository** (`POST /runs/{id}/rerun`). This copies the transcript and screenshots, carries over the meeting analysis and requirements (those nodes skip when their output is already in state), and closes the old run as cancelled. The user can also **draft anyway** (`POST /runs/{id}/code-fit`), or **stop** (Reject at this stage does the same).
+- The 25% threshold is a first guess, to be tuned in M5.
+
 ## VERIFY items
 
 | Item (spec section) | Status |

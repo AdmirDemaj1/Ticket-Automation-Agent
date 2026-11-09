@@ -21,6 +21,8 @@ from app.graph.nodes import Deps
 from app.llm import LLM, build_llm
 from app.models import (
     CodeFinding,
+    CodeFit,
+    CodeFitDecision,
     CreatedTicket,
     MeetingAnalysis,
     Requirement,
@@ -42,10 +44,11 @@ from app.services.intake import (
     IntakeError,
     NewRunRequest,
     UploadedFile,
+    create_rerun,
     create_run,
     estimate_tokens,
 )
-from app.services.runs import TERMINAL, RunConflict, RunManager
+from app.services.runs import TERMINAL, ReviewStage, RunConflict, RunManager
 from app.services.tickets import run_label
 
 log = logging.getLogger("app")
@@ -183,10 +186,17 @@ class RunDetail(BaseModel):
     created: list[CreatedTicket]
     tokens_used: int
     jira_labels: list[str]
+    review_stage: ReviewStage | None
+    code_fit: CodeFit | None
 
 
 class DraftsUpdate(BaseModel):
     drafts: list[TicketDraft]
+
+
+class RerunBody(BaseModel):
+    repo: str
+    branch: str
 
 
 class ApproveBody(BaseModel):
@@ -313,6 +323,8 @@ def _register_routes(app: FastAPI) -> None:
             created=[CreatedTicket.model_validate(c) for c in values.get("created", [])],
             tokens_used=int(values.get("tokens_used", 0)),
             jira_labels=[run_label(run_id), f"{run_label(run_id)}-<draft id>"],
+            review_stage=await runs.stage(run_id) if run.status == "awaiting_review" else None,
+            code_fit=CodeFit.model_validate(values["code_fit"]) if values.get("code_fit") else None,
         )
 
     @app.get("/runs/{run_id}/screenshots/{order}")
@@ -360,6 +372,8 @@ def _register_routes(app: FastAPI) -> None:
     async def approve(run_id: str, body: ApproveBody, db: DbDep, runs: RunsDep) -> Run:
         if _get_run(db, run_id).status != "awaiting_review":
             raise RunConflict("Only a run that awaits review can be approved")
+        if await runs.stage(run_id) != "drafts":
+            raise RunConflict("There are no drafts to approve yet")
         rows = db.list_drafts(run_id)
         known = {r.draft.temp_id for r in rows}
         selected = set(body.selected)
@@ -381,8 +395,44 @@ def _register_routes(app: FastAPI) -> None:
     @app.post("/runs/{run_id}/reject", status_code=202)
     async def reject(run_id: str, db: DbDep, runs: RunsDep) -> Run:
         _get_run(db, run_id)
-        runs.reject(run_id)
+        if await runs.stage(run_id) == "code_fit":
+            runs.resolve_code_fit(run_id, CodeFitDecision(decision="stop"))
+        else:
+            runs.reject(run_id)
         return _get_run(db, run_id)
+
+    @app.post("/runs/{run_id}/code-fit", status_code=202)
+    async def code_fit_decision(
+        run_id: str, body: CodeFitDecision, db: DbDep, runs: RunsDep
+    ) -> Run:
+        _get_run(db, run_id)
+        if await runs.stage(run_id) != "code_fit":
+            raise RunConflict("The run is not waiting for a code-fit decision")
+        runs.resolve_code_fit(run_id, body)
+        return _get_run(db, run_id)
+
+    @app.post("/runs/{run_id}/rerun", status_code=202)
+    async def rerun(
+        run_id: str,
+        body: RerunBody,
+        settings: SettingsDep,
+        db: DbDep,
+        runs: RunsDep,
+        code: CodeDep,
+    ) -> RunCreated:
+        """Run the code steps again on another repository, reusing the meeting work."""
+        source = _get_run(db, run_id)
+        values = await runs.state(run_id)
+        new_run, state = await create_rerun(
+            source, values, body.repo, body.branch, settings, db, code
+        )
+        runs.start(new_run.id, state)
+        db.add_event(
+            run_id, "run", "info", f"Re-run on {body.repo} @ {body.branch} as run {new_run.id[:8]}"
+        )
+        if await runs.stage(run_id) == "code_fit":
+            runs.resolve_code_fit(run_id, CodeFitDecision(decision="stop"))
+        return RunCreated(run_id=new_run.id)
 
     @app.post("/runs/{run_id}/cancel")
     async def cancel(run_id: str, db: DbDep, runs: RunsDep) -> Run:

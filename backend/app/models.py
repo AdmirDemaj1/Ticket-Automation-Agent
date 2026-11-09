@@ -120,8 +120,33 @@ class CodePlan(BaseModel):
     paths: list[str] = Field(description="Repository paths to read, most relevant first")
 
 
+class RepositoryFit(BaseModel):
+    verdict: Literal["matches", "partly", "does_not_match", "cannot_tell"] = Field(
+        description="Is this repository the codebase the meeting is about?"
+    )
+    reason: str = Field(description="One or two sentences, citing what the files show")
+
+
 class FindingList(BaseModel):
     findings: list[CodeFinding]
+    repository_fit: RepositoryFit
+
+
+class CodeFit(BaseModel):
+    """Computed after compare_with_code: may the run go on to drafting tickets?"""
+
+    ok: bool
+    verdict: Literal["matches", "partly", "does_not_match", "cannot_tell"]
+    reason: str
+    confident: int  # requirements checked with medium/high confidence
+    total: int
+    files_read: int
+
+
+class CodeFitDecision(BaseModel):
+    """The value the graph resumes with when the code did not fit the meeting."""
+
+    decision: Literal["draft_anyway", "stop"]
 
 
 class TicketDraftOut(BaseModel):

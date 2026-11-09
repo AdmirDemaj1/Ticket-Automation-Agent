@@ -117,6 +117,17 @@ export interface RunDetail {
   created: CreatedTicket[];
   tokens_used: number;
   jira_labels: string[];
+  review_stage: 'code_fit' | 'drafts' | null;
+  code_fit: CodeFit | null;
+}
+
+export interface CodeFit {
+  ok: boolean;
+  verdict: 'matches' | 'partly' | 'does_not_match' | 'cannot_tell';
+  reason: string;
+  confident: number;
+  total: number;
+  files_read: number;
 }
 
 export interface Repo {

@@ -11,7 +11,7 @@ retried from their last checkpoint.
 
 import asyncio
 import logging
-from typing import Any
+from typing import Any, Literal
 
 from langgraph.types import Command
 
@@ -20,12 +20,13 @@ from app.graph.build import Graph, thread_config
 from app.graph.nodes import ApprovalRequired
 from app.graph.state import RunState
 from app.llm import LLMError
-from app.models import ReviewDecision, RunStatus
+from app.models import CodeFitDecision, ReviewDecision, RunStatus
 from app.providers.base import ProviderError
 from app.providers.transcript import TranscriptError
 
 log = logging.getLogger("app.runs")
 
+ReviewStage = Literal["code_fit", "drafts"]
 ACTIVE: tuple[RunStatus, ...] = ("queued", "running", "creating_tickets")
 TERMINAL: tuple[RunStatus, ...] = ("completed", "failed", "cancelled")
 _SAFE_ERRORS = (LLMError, ProviderError, TranscriptError, ApprovalRequired)
@@ -81,6 +82,14 @@ class RunManager:
         decision = ReviewDecision(decision="reject")
         self._spawn(run_id, Command(resume=decision.model_dump()), "running")
 
+    def resolve_code_fit(self, run_id: str, decision: CodeFitDecision) -> None:
+        self._require(run_id, "awaiting_review")
+        if decision.decision == "draft_anyway":
+            self.db.add_event(run_id, "review", "info", "Drafting tickets anyway, as requested")
+        else:
+            self.db.add_event(run_id, "review", "info", "Stopped; no tickets will be drafted")
+        self._spawn(run_id, Command(resume=decision.model_dump()), "running")
+
     def retry(self, run_id: str) -> None:
         self._require(run_id, "failed")
         self.db.add_event(run_id, "run", "info", "Retrying from the last checkpoint")
@@ -101,6 +110,15 @@ class RunManager:
             await asyncio.gather(task, return_exceptions=True)
         self.db.set_status(run_id, "cancelled")
         self.db.add_event(run_id, "run", "warning", "Run cancelled")
+
+    async def stage(self, run_id: str) -> ReviewStage | None:
+        """Which pause the run is in: the code-fit check or the draft review."""
+        snapshot = await self.graph.aget_state(thread_config(run_id))
+        if "code_fit_review" in snapshot.next:
+            return "code_fit"
+        if "human_review" in snapshot.next:
+            return "drafts"
+        return None
 
     async def state(self, run_id: str) -> dict[str, Any]:
         snapshot = await self.graph.aget_state(thread_config(run_id))
@@ -141,6 +159,18 @@ class RunManager:
             return
 
         snapshot = await self.graph.aget_state(config)
+        if "code_fit_review" in snapshot.next:
+            fit = (snapshot.values or {}).get("code_fit") or {}
+            self.db.set_status(run_id, "awaiting_review")
+            self.db.add_event(
+                run_id,
+                "review",
+                "warning",
+                "No tickets drafted: the code does not seem to match the meeting. "
+                + (fit.get("reason") or "")
+                + " Choose another repository, or draft anyway.",
+            )
+            return
         if "human_review" in snapshot.next:
             self.db.set_status(run_id, "awaiting_review")
             self.db.add_event(run_id, "review", "info", "Drafts are ready for review")

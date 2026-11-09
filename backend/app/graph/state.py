@@ -19,6 +19,9 @@ class RunState(TypedDict, total=False):
     code_candidates: list[str]
     code_files: dict[str, str]  # path -> text that was read (local data only)
     code_findings: list[dict[str, Any]]  # CodeFinding
+    repository_fit: dict[str, Any] | None  # RepositoryFit, from compare_with_code
+    code_fit: dict[str, Any] | None  # CodeFit: may the run draft tickets?
+    code_fit_decision: str | None  # "draft_anyway" | "stop", set on resume
     drafts: list[dict[str, Any]]  # TicketDraft
     review: dict[str, Any] | None  # ReviewDecision, set on resume
     created: list[dict[str, Any]]  # CreatedTicket

@@ -2,6 +2,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { ArrowDown, ArrowUp, GripVertical, X } from 'lucide-react';
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Picker } from '@/components/run/Picker';
 import { Button } from '@/components/ui/button';
 import { Card, CardDescription, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -16,7 +17,6 @@ import type {
   Repo,
   TicketType,
 } from '@/lib/types';
-import { cn } from '@/lib/utils';
 
 const IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
 const TRANSCRIPT_ACCEPT = '.vtt,.txt,.docx';
@@ -448,48 +448,5 @@ export function NewRunPage() {
         </Button>
       </Card>
     </form>
-  );
-}
-
-function Picker({
-  id,
-  label,
-  value,
-  onChange,
-  options,
-  loading,
-  error,
-}: {
-  id: string;
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  options: { value: string; label: string }[];
-  loading: boolean;
-  error?: string;
-}) {
-  return (
-    <div className="space-y-1">
-      <Label htmlFor={id}>{label}</Label>
-      <select
-        id={id}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        disabled={loading || options.length === 0}
-        aria-invalid={Boolean(error)}
-        className={cn(
-          'flex h-9 w-full rounded-[var(--radius)] border border-border bg-background px-3 text-sm focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-50',
-          error && 'border-destructive',
-        )}
-      >
-        {loading && <option>Loading…</option>}
-        {options.map((o) => (
-          <option key={o.value} value={o.value}>
-            {o.label}
-          </option>
-        ))}
-      </select>
-      {error && <p className="text-xs text-destructive">{error}</p>}
-    </div>
   );
 }

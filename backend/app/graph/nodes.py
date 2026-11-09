@@ -22,11 +22,14 @@ from app.graph.state import RunState
 from app.llm import LLM, Image, Part, Text
 from app.models import (
     CodeFinding,
+    CodeFit,
+    CodeFitDecision,
     CodePlan,
     DraftList,
     Evidence,
     FindingList,
     MeetingAnalysis,
+    RepositoryFit,
     Requirement,
     RequirementList,
     ReviewDecision,
@@ -81,6 +84,8 @@ class Nodes:
     # ---------- LLM steps ----------
 
     async def analyze_meeting(self, state: RunState) -> dict[str, Any]:
+        if state.get("meeting_analysis"):  # carried over by a re-run on another repository
+            return {"_summary": "reused from the previous run"}
         content: list[Part] = [Text(_transcript_block(state))]
         for shot in _screenshots(state):
             data = await asyncio.to_thread(Path(shot.path).read_bytes)
@@ -103,6 +108,8 @@ class Nodes:
         }
 
     async def extract_requirements(self, state: RunState) -> dict[str, Any]:
+        if state.get("requirements"):  # carried over by a re-run on another repository
+            return {"_summary": f"{len(state['requirements'])} requirements reused"}
         content: list[Part] = [
             Text(_transcript_block(state)),
             Text(_json_block("meeting_summary", state.get("meeting_analysis"))),
@@ -206,6 +213,7 @@ class Nodes:
             counts[f.status] = counts.get(f.status, 0) + 1
         return {
             "code_findings": [f.model_dump() for f in findings],
+            "repository_fit": result.output.repository_fit.model_dump(),
             "tokens_used": state.get("tokens_used", 0) + result.tokens,
             "_summary": ", ".join(f"{n} {status}" for status, n in sorted(counts.items())),
         }
@@ -237,6 +245,23 @@ class Nodes:
             "tokens_used": state.get("tokens_used", 0) + result.tokens,
             "_summary": f"{len(drafts)} draft tickets",
         }
+
+    async def check_code_fit(self, state: RunState) -> dict[str, Any]:
+        """No LLM. Decide whether the code is a sound basis for tickets."""
+        findings = [CodeFinding.model_validate(f) for f in state.get("code_findings", [])]
+        fit = RepositoryFit.model_validate(
+            state.get("repository_fit") or {"verdict": "cannot_tell", "reason": ""}
+        )
+        code_fit = assess_code_fit(findings, fit, len(state.get("code_files", {})))
+        summary = f"{code_fit.confident} of {code_fit.total} requirements checked with confidence"
+        if not code_fit.ok:
+            summary += "; the code does not seem to match the meeting"
+        return {"code_fit": code_fit.model_dump(), "_summary": summary}
+
+    async def code_fit_review(self, state: RunState) -> dict[str, Any]:
+        # Same rule as human_review: nothing before interrupt(), no try/except around it.
+        decision = interrupt({"run_id": state["run_id"], "kind": "code_fit"})
+        return {"code_fit_decision": CodeFitDecision.model_validate(decision).decision}
 
     # ---------- review and write ----------
 
@@ -276,12 +301,47 @@ class Nodes:
         return {}
 
 
+def route_after_fit(state: RunState) -> str:
+    fit = state.get("code_fit") or {}
+    return "draft_tickets" if fit.get("ok") else "code_fit_review"
+
+
+def route_after_fit_review(state: RunState) -> str:
+    return "draft_tickets" if state.get("code_fit_decision") == "draft_anyway" else "finalize"
+
+
 def route_after_review(state: RunState) -> str:
     review = state.get("review") or {}
     return "create_tickets" if review.get("decision") == "approve" else "finalize"
 
 
 # ---------- checks on LLM output (pure, unit-tested) ----------
+
+# Below this share of confidently checked requirements, the code is not a sound basis for
+# tickets unless the model is sure the repository matches.
+MIN_CONFIDENT_SHARE = 0.25
+
+
+def assess_code_fit(findings: list[CodeFinding], fit: RepositoryFit, files_read: int) -> CodeFit:
+    total = len(findings)
+    confident = sum(1 for f in findings if f.status != "unclear" and f.confidence != "low")
+    reason = fit.reason.strip()
+    ok = True
+    if files_read == 0:
+        ok, reason = False, "No code files could be read from this repository and branch."
+    elif fit.verdict == "does_not_match":
+        ok = False
+    elif total and confident / total < MIN_CONFIDENT_SHARE and fit.verdict != "matches":
+        ok = False
+        reason = reason or "Most requirements could not be checked against the code that was read."
+    return CodeFit(
+        ok=ok,
+        verdict=fit.verdict,
+        reason=reason,
+        confident=confident,
+        total=total,
+        files_read=files_read,
+    )
 
 
 def rank_paths(tree: list[FileEntry], requirements: list[Requirement]) -> list[FileEntry]:

@@ -105,6 +105,15 @@ function detail(overrides: Partial<RunDetail> = {}): RunDetail {
     created: [],
     tokens_used: 12345,
     jira_labels: ['mtj-r1', 'mtj-r1-<draft id>'],
+    review_stage: 'drafts',
+    code_fit: {
+      ok: true,
+      verdict: 'matches',
+      reason: 'Same app.',
+      confident: 1,
+      total: 2,
+      files_read: 1,
+    },
     ...overrides,
   };
 }
@@ -244,4 +253,65 @@ it('offers a retry for a failed run', async () => {
     expect(fetch.mock.calls.some(([url]) => url === '/api/runs/r1/retry')).toBe(true),
   );
   await waitFor(() => expect(sources.instances).toHaveLength(2)); // stream reopened
+});
+
+it('stops before drafting when the code does not fit, and offers a re-run', async () => {
+  const stopped = detail({
+    drafts: [],
+    review_stage: 'code_fit',
+    code_fit: {
+      ok: false,
+      verdict: 'does_not_match',
+      reason: 'The meeting is about a mobile onboarding flow; this is a web admin app.',
+      confident: 0,
+      total: 14,
+      files_read: 21,
+    },
+  });
+  const fetch = mockFetch({
+    'GET /api/runs/r1': () => json(stopped),
+    'GET /api/code/repos': () =>
+      json([
+        { id: 'fixtures/demo-app', name: 'fixtures/demo-app', default_branch: 'main' },
+        { id: 'me/mobile-app', name: 'me/mobile-app', default_branch: 'develop' },
+      ]),
+    'GET /api/code/repos/me/mobile-app/branches': () => json(['develop', 'main']),
+    'POST /api/runs/r1/rerun': () => json({ run_id: 'r2' }, 202),
+    'POST /api/runs/r1/code-fit': () => json({ ...stopped.run, status: 'running' }, 202),
+  });
+  const user = userEvent.setup();
+  renderWithProviders(<RunDetailPage />, ROUTE);
+
+  const panel = await screen.findByRole('region', { name: 'Code check' });
+  expect(panel).toHaveTextContent('No tickets were drafted');
+  expect(panel).toHaveTextContent('does not seem to be the code this meeting is about');
+  expect(panel).toHaveTextContent('mobile onboarding flow');
+  expect(panel).toHaveTextContent('0 of 14 requirements could be checked with confidence');
+  expect(screen.queryByRole('button', { name: 'Approve & create in Jira' })).toBeNull();
+  // The analysis stays visible; the current repository is not offered again.
+  expect(screen.getByRole('tab', { name: 'Code analysis' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  const repoSelect = within(panel).getByLabelText('Repository');
+  await waitFor(() => expect(repoSelect).toHaveValue('me/mobile-app'));
+  expect(within(repoSelect).queryByRole('option', { name: 'fixtures/demo-app' })).toBeNull();
+  await waitFor(() => expect(within(panel).getByLabelText('Branch')).toHaveValue('develop'));
+
+  await user.click(within(panel).getByRole('button', { name: 'Draft tickets anyway' }));
+  await waitFor(() =>
+    expect(fetch.mock.calls.some(([url]) => url === '/api/runs/r1/code-fit')).toBe(true),
+  );
+  const decision = fetch.mock.calls.find(([url]) => url === '/api/runs/r1/code-fit')!;
+  expect(JSON.parse(decision[1]!.body as string)).toEqual({ decision: 'draft_anyway' });
+
+  await user.click(within(panel).getByRole('button', { name: 'Re-run with this repository' }));
+  await waitFor(() =>
+    expect(fetch.mock.calls.some(([url]) => url === '/api/runs/r1/rerun')).toBe(true),
+  );
+  const rerun = fetch.mock.calls.find(([url]) => url === '/api/runs/r1/rerun')!;
+  expect(JSON.parse(rerun[1]!.body as string)).toEqual({
+    repo: 'me/mobile-app',
+    branch: 'develop',
+  });
 });

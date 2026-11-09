@@ -1,8 +1,11 @@
 """New runs: validate every upload in memory, then store files under data/runs/<run_id>/."""
 
+import asyncio
 import json
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from pydantic import ValidationError
 
@@ -178,3 +181,72 @@ async def _check_targets(inputs: RunInputs, code: CodeProvider, jira: JiraProvid
     unknown = [t for t in inputs.issue_types if t not in types]
     if unknown:
         raise IntakeError(f"Issue type(s) not in {inputs.jira_project_key}: {', '.join(unknown)}")
+
+
+async def create_rerun(
+    source: Run,
+    values: dict[str, Any],
+    repo: str,
+    branch: str,
+    settings: Settings,
+    db: Database,
+    code: CodeProvider,
+) -> tuple[Run, RunState]:
+    """A new run on another repository that reuses the source run's meeting work.
+
+    The transcript and screenshots are copied, and the meeting analysis and requirements are
+    carried over, so only the code steps and the drafting call Claude again.
+    """
+    if not values.get("requirements"):
+        raise IntakeError("This run has no requirements to reuse yet")
+    branches = await code.list_branches(repo)
+    if branch not in branches:
+        raise IntakeError(f"Branch {branch!r} not found in {repo}")
+    inputs = source.inputs.model_copy(update={"repo": repo, "branch": branch})
+
+    run = db.create_run(inputs)
+    try:
+        transcript_path, refs = await asyncio.to_thread(
+            _copy_inputs, values, settings.runs_dir, settings.runs_dir / run.id
+        )
+    except (IntakeError, OSError) as e:
+        message = str(e) if isinstance(e, IntakeError) else "Could not copy the source files"
+        db.set_status(run.id, "failed", message)
+        raise IntakeError(message) from e
+    state: RunState = {
+        "run_id": run.id,
+        "inputs": inputs.model_dump(),
+        "transcript_path": str(transcript_path),
+        "screenshots": refs,
+        "meeting_analysis": values.get("meeting_analysis"),
+        "requirements": values["requirements"],
+        "tokens_used": 0,
+        "errors": [],
+    }
+    return run, state
+
+
+def _copy_inputs(
+    values: dict[str, Any], runs_dir: Path, folder: Path
+) -> tuple[Path, list[dict[str, Any]]]:
+    """Copy the source run's transcript and screenshots into a new run folder."""
+    runs_root = runs_dir.resolve()
+    shots_dir = folder / "screenshots"
+    shots_dir.mkdir(parents=True, exist_ok=True)
+
+    old_transcript = Path(values["transcript_path"]).resolve()
+    if not old_transcript.is_relative_to(runs_root) or not old_transcript.is_file():
+        raise IntakeError("The source run's transcript is missing")
+    transcript_path = folder / old_transcript.name
+    shutil.copyfile(old_transcript, transcript_path)
+
+    refs: list[dict[str, Any]] = []
+    for item in values.get("screenshots", []):
+        ref = ScreenshotRef.model_validate(item)
+        old = Path(ref.path).resolve()
+        if not old.is_relative_to(runs_root) or not old.is_file():
+            continue
+        new = shots_dir / old.name
+        shutil.copyfile(old, new)
+        refs.append(ref.model_copy(update={"path": str(new)}).model_dump())
+    return transcript_path, refs
