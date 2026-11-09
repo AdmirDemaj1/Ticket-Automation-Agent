@@ -10,8 +10,8 @@ Runs on your own machine. Spec: [Claude-Reference.md](Claude-Reference.md). Deci
 |---|---|
 | M1 Skeleton and fakes | Done |
 | M2 Pipeline end to end on fixtures | Done |
-| M3 Real code provider (GitHub/GitLab) | Next |
-| M4 Real Jira | Not started |
+| M3 Real code provider (GitHub; GitLab later) | Done, pending a run on a real repo |
+| M4 Real Jira | Next |
 | M5 Real-meeting trial | Not started |
 | M6 Hardening | Not started |
 
@@ -48,8 +48,8 @@ A run paused for review survives a backend restart. A run that failed, or was in
 Edit `.env`. The backend refuses to start and lists what is missing if a provider is selected without its credentials.
 
 - **Claude:** `LLM_PROVIDER=anthropic` and `ANTHROPIC_API_KEY`. The model comes from `ANTHROPIC_MODEL` (default `claude-opus-5-5`), depth from `ANTHROPIC_EFFORT` (default `medium`). Each run stops at `MAX_LLM_TOKENS_PER_RUN`; the New Run page shows an estimate first.
-- **GitHub:** `CODE_PROVIDER=github` and `GITHUB_TOKEN`, a fine-grained personal access token with *Contents: Read-only* on selected repositories only. (Milestone M3.)
-- **GitLab:** `CODE_PROVIDER=gitlab`, `GITLAB_BASE_URL` and `GITLAB_TOKEN` with scope `read_api`. (M3.)
+- **GitHub:** `CODE_PROVIDER=github` and `GITHUB_TOKEN`. Create a [fine-grained personal access token](https://github.com/settings/personal-access-tokens/new) with *Repository access: Only select repositories* and *Repository permissions > Contents: Read-only*. Nothing else is needed. The repository picker lists exactly the repositories the token can see. The app only sends GET requests, never uses GitHub's code search, and reads at most `MAX_CODE_FILES` files and `MAX_TOTAL_CODE_BYTES` bytes per run.
+- **GitLab:** not implemented yet (`CODE_PROVIDER=gitlab` returns a clear error). Planned: `GITLAB_BASE_URL` and `GITLAB_TOKEN` with scope `read_api`.
 - **Jira Cloud:** `JIRA_PROVIDER=jira`, `JIRA_BASE_URL`, `JIRA_EMAIL` and `JIRA_API_TOKEN` from https://id.atlassian.com/manage-profile/security/api-tokens. The token can do anything your Jira user can, so prefer a dedicated user. (M4.)
 
 ## Develop

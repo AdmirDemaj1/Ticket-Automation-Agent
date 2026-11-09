@@ -38,6 +38,7 @@ class Settings(BaseSettings):
     # Code source
     code_provider: Literal["github", "gitlab", "fake"] = "fake"
     github_token: SecretStr | None = None
+    github_api_url: str = "https://api.github.com"
     gitlab_base_url: str = "https://gitlab.com"
     gitlab_token: SecretStr | None = None
 

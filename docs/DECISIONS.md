@@ -85,13 +85,29 @@ Images are checked by magic bytes, then decoded with Pillow (pixel-count limit),
 - **Local grep over fetched files** (spec 6.2): M2 picks files by keyword ranking plus the LLM plan. Grep-based search arrives with the real code providers (M3), where repositories are large enough to need it.
 - **Delete run data and retention** (spec security 6): M6.
 
+## D16. GitHub code provider (2026-11-09, M3)
+
+- GitHub first, GitLab later (the user's personal GitHub account). `CODE_PROVIDER=gitlab` still answers with a clear "not implemented" error.
+- Plain `httpx`, a new client per call (providers are built per use and never stored in state). Headers: `Authorization: Bearer`, `X-GitHub-Api-Version: 2022-11-28`, `Accept: application/vnd.github+json`.
+- Endpoints, all GET: `/user/repos` (picker; archived repos hidden; Link-header pagination up to 10 pages), `/repos/{r}/branches`, `/repos/{r}/git/ref/heads/{branch}` then `/git/commits/{sha}` to find the root tree (this handles branch names with slashes), `/git/trees/{sha}?recursive=1`, `/contents/{path}?ref=` with `application/vnd.github.raw+json`.
+- Truncated trees (above 100,000 entries or 7 MB, per the docs) are walked one directory at a time, skipping vendored and build folders, for at most 300 requests.
+- The tree is filtered with the shared filters (`MAX_FILE_BYTES`, lockfiles, binaries, `node_modules`, ...). Symlinks and submodules are skipped. File reads stop after `MAX_FILE_BYTES + 1` bytes.
+- Files are read by branch name, not by a pinned commit, so a push during a run could mix two commits. This is acceptable for one user; revisit if it matters.
+- Read-only is enforced twice: an `httpx` request hook raises `ReadOnlyViolation` for any non-GET method, and a test runs the whole pipeline against a mock GitHub and checks that every request was a GET to an allowed read endpoint (no `/search/`).
+- Errors become readable messages: 401 (token rejected), 403 with `x-ratelimit-remaining: 0` (rate limit, with the reset time), 403 (missing *Contents* permission), 404 (not found or not selected for the token), 409 (empty repository). 5xx, 429 and secondary rate limits are retried 3 times with exponential backoff (`tenacity`), then reported.
+
+## D17. Local search (2026-11-09, M3)
+
+`services/search.py` greps the fetched files for each requirement's words (4+ letters, minus common words) and ranks lines by how many different words they contain, keeping 8 per requirement. The hits go to `compare_with_code` as a `<search_hits>` block. The prompt (now `compare_with_code.v2`) says they are pointers, not evidence; evidence is still checked against the files that were read. Which files to fetch is still decided by path ranking plus the LLM plan; following imports is a possible later improvement.
+
 ## VERIFY items
 
 | Item (spec section) | Status |
 |---|---|
 | SQLite checkpointer package and class (5) | Resolved (M2): package `langgraph-checkpoint-sqlite` 3.1, class `langgraph.checkpoint.sqlite.aio.AsyncSqliteSaver` (`from_conn_string`) |
-| GitLab token scope for the tree endpoint (6.2) | Open, M3 |
+| GitLab token scope for the tree endpoint (6.2) | Deferred: GitLab is not built yet (D16) |
 | How the new createmeta endpoints mark required fields (6.3) | Open, M4 |
 | API-token Basic auth on Agile (sprint) endpoints (6.3) | Open, M4 |
 | LangGraph `interrupt` / `Command(resume=...)` API (7.2) | Resolved (M2): `from langgraph.types import interrupt, Command` in langgraph 1.2; resume re-runs the node from its start; tested across a checkpointer restart |
+| GitHub fine-grained token permission for trees and contents (6.2) | Docs pages do not state it; *Contents: Read-only* is GitHub's documented permission for repository contents. Confirm on the first real run |
 | Anthropic structured outputs usage (7.3) | Resolved (M2): see D11. Checked against the installed SDK only; no call to the real API has been made yet |

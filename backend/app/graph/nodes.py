@@ -39,6 +39,7 @@ from app.models import (
 from app.prompts import system_prompt
 from app.providers.base import CodeProvider, FileEntry, JiraProvider
 from app.providers.transcript import ManualUploadProvider, render_transcript
+from app.services.search import render_hits
 from app.services.tickets import create_approved_tickets
 
 TREE_LISTING_LIMIT = 1500
@@ -189,6 +190,7 @@ class Nodes:
         content: list[Part] = [
             Text(_json_block("requirements", [r.model_dump() for r in requirements])),
             *[Text(_file_block(path, text)) for path, text in files.items()],
+            Text(render_hits(requirements, files)),
             Text("Return one finding per requirement."),
         ]
         result = await self.deps.llm.structured(

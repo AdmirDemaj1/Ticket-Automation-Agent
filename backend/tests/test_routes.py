@@ -47,13 +47,13 @@ def test_runs_list_starts_empty(client: TestClient) -> None:
 
 
 def test_unimplemented_real_provider_returns_501(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:  # type: ignore[no-untyped-def]
-    monkeypatch.setenv("CODE_PROVIDER", "github")
-    monkeypatch.setenv("GITHUB_TOKEN", "x")
+    monkeypatch.setenv("CODE_PROVIDER", "gitlab")
+    monkeypatch.setenv("GITLAB_TOKEN", "x")
     settings = load_settings(data_dir=tmp_path / "d", fixtures_dir=FIXTURES)
     with TestClient(create_app(settings)) as client:
         res = client.get("/code/repos")
     assert res.status_code == 501
-    assert "M3" in res.json()["detail"]
+    assert "CODE_PROVIDER=gitlab is not implemented" in res.json()["detail"]
 
 
 def test_cors_allows_only_local_frontend(client: TestClient) -> None:

@@ -10,7 +10,7 @@ VERSIONS: dict[str, str] = {
     "analyze_meeting": "v1",
     "extract_requirements": "v1",
     "plan_code_reading": "v1",
-    "compare_with_code": "v1",
+    "compare_with_code": "v2",  # v2: local search hits
     "draft_tickets": "v1",
 }
 
