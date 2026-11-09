@@ -105,6 +105,7 @@ function detail(overrides: Partial<RunDetail> = {}): RunDetail {
     created: [],
     tokens_used: 12345,
     jira_labels: ['mtj-r1', 'mtj-r1-<draft id>'],
+    sprint: null,
     review_stage: 'drafts',
     code_fit: {
       ok: true,
@@ -125,6 +126,8 @@ it('edits, saves and approves drafts with a confirmation', async () => {
     'GET /api/runs/r1': () => json(detail()),
     'PUT /api/runs/r1/drafts': () => json([]),
     'POST /api/runs/r1/approve': () => json({ ...detail().run, status: 'creating_tickets' }, 202),
+    'GET /api/jira/projects/DEMO/sprints': () =>
+      json([{ id: 6, name: 'A3 Sprint 1', state: 'active', board: 'A3 board' }]),
   });
   const user = userEvent.setup();
   renderWithProviders(<RunDetailPage />, ROUTE);
@@ -156,6 +159,12 @@ it('edits, saves and approves drafts with a confirmation', async () => {
 
   await user.click(approve);
   const dialog = screen.getByRole('dialog', { name: 'Create Jira issues?' });
+  await waitFor(() =>
+    expect(
+      within(dialog).getByRole('option', { name: 'A3 Sprint 1 (active)' }),
+    ).toBeInTheDocument(),
+  );
+  await user.selectOptions(within(dialog).getByLabelText('Sprint'), '6');
   expect(dialog).toHaveTextContent('This creates 1 issue in Jira project DEMO.');
   expect(dialog).toHaveTextContent('mtj-r1');
   await user.click(within(dialog).getByRole('button', { name: 'Create issues' }));
@@ -164,7 +173,7 @@ it('edits, saves and approves drafts with a confirmation', async () => {
     expect(fetch.mock.calls.some(([url]) => url === '/api/runs/r1/approve')).toBe(true),
   );
   const post = fetch.mock.calls.find(([url]) => url === '/api/runs/r1/approve')!;
-  expect(JSON.parse(post[1]!.body as string)).toEqual({ selected: ['T1'] });
+  expect(JSON.parse(post[1]!.body as string)).toEqual({ selected: ['T1'], sprint_id: 6 });
 });
 
 it('shows the code analysis with evidence and warnings', async () => {

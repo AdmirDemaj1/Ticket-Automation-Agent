@@ -64,9 +64,9 @@ async def test_fake_jira_creates_searches_and_persists(tmp_path: Path) -> None:
     assert [o.issue.key for o in outcomes if o.issue] == ["DEMO-1", "DEMO-2"]
 
     reopened = FakeJiraProvider(store)  # survives a backend restart
-    assert [r.key for r in await reopened.find_by_label("mtj-r1")] == ["DEMO-1", "DEMO-2"]
-    assert [r.key for r in await reopened.find_by_label("mtj-r1-T2")] == ["DEMO-2"]
-    assert await reopened.find_by_label("mtj-other") == []
+    assert [r.key for r in await reopened.find_by_label("DEMO", "mtj-r1")] == ["DEMO-1", "DEMO-2"]
+    assert [r.key for r in await reopened.find_by_label("DEMO", "mtj-r1-T2")] == ["DEMO-2"]
+    assert await reopened.find_by_label("DEMO", "mtj-other") == []
     assert [name for name, _ in jira.calls] == ["create_issues"]
 
 

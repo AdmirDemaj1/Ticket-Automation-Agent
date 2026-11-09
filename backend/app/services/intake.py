@@ -15,6 +15,7 @@ from app.graph.state import RunState
 from app.models import RunInputs, ScreenshotRef, Transcript
 from app.providers.base import CodeProvider, JiraProvider
 from app.providers.transcript import SUPPORTED_EXTENSIONS, TranscriptError, parse_transcript
+from app.services.tickets import UnfillableFields, check_required_fields
 from app.uploads import CleanImage, UploadError, clean_screenshot
 
 # Rough per-run token estimate (shown before starting; enforced separately by the budget).
@@ -181,6 +182,11 @@ async def _check_targets(inputs: RunInputs, code: CodeProvider, jira: JiraProvid
     unknown = [t for t in inputs.issue_types if t not in types]
     if unknown:
         raise IntakeError(f"Issue type(s) not in {inputs.jira_project_key}: {', '.join(unknown)}")
+    # Fail now rather than after the whole pipeline if Jira needs fields we cannot fill.
+    try:
+        await check_required_fields(jira, inputs.jira_project_key, list(inputs.issue_types))
+    except UnfillableFields as e:
+        raise IntakeError(str(e)) from None
 
 
 async def create_rerun(

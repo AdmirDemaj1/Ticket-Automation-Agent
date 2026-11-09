@@ -1,17 +1,33 @@
 """Create approved drafts in Jira, idempotently. Shared by the fake and the real Jira provider.
 
 Every issue gets two labels: `mtj-<run_id>` and `mtj-<run_id>-<temp_id>`. Before creating,
-each draft's own label is searched; drafts that already exist are reported, not re-created.
+the run's label is searched once, and drafts whose own label is found (or whose Jira key is
+already stored locally, which covers search lag) are reported as existing, not re-created.
 Approving the same run twice therefore never makes duplicates.
 """
 
 import re
+from dataclasses import dataclass
 
 from app.models import CreatedTicket, TicketDraft
-from app.providers.base import JiraProvider, NewIssue, ProviderError
+from app.providers.base import IssueRef, JiraProvider, NewIssue, ProviderError
 
 CHUNK_SIZE = 50
 _LABEL_UNSAFE = re.compile(r"[^\w.-]+")
+
+# Fields the app always fills (or Jira fills itself) when creating an issue.
+FILLED_FIELDS = frozenset({"summary", "issuetype", "project", "description", "labels", "reporter"})
+
+
+class UnfillableFields(ProviderError):
+    """The project requires fields the app cannot fill. The message lists them."""
+
+
+@dataclass(frozen=True)
+class SprintResult:
+    sprint_id: int
+    added: list[str]
+    error: str | None = None
 
 
 def run_label(run_id: str) -> str:
@@ -54,20 +70,65 @@ def to_new_issue(run_id: str, draft: TicketDraft) -> NewIssue:
     )
 
 
+async def check_required_fields(
+    jira: JiraProvider, project_key: str, type_names: list[str]
+) -> None:
+    """Raise UnfillableFields listing required fields (per issue type) the app cannot fill."""
+    types = {t.name: t for t in await jira.list_issue_types(project_key)}
+    problems: list[str] = []
+    for name in dict.fromkeys(type_names):
+        issue_type = types.get(name)
+        if issue_type is None:
+            problems.append(f"{name}: this issue type does not exist in {project_key}")
+            continue
+        if issue_type.subtask:
+            problems.append(f"{name}: sub-tasks need a parent issue, which the app does not set")
+            continue
+        fields = await jira.get_create_fields(project_key, issue_type.id)
+        missing = [
+            f.name for f in fields if f.required and not f.has_default and f.id not in FILLED_FIELDS
+        ]
+        if missing:
+            problems.append(f"{name}: {', '.join(missing)}")
+    if problems:
+        raise UnfillableFields(
+            f"Jira project {project_key} requires fields this app cannot fill. "
+            "Make them optional or give them a default in Jira, or choose other issue types. "
+            + " | ".join(problems)
+        )
+
+
 async def create_approved_tickets(
-    jira: JiraProvider, project_key: str, run_id: str, drafts: list[TicketDraft]
+    jira: JiraProvider,
+    project_key: str,
+    run_id: str,
+    drafts: list[TicketDraft],
+    known: dict[str, IssueRef] | None = None,
 ) -> list[CreatedTicket]:
+    """Create the drafts that do not exist yet. One failure never blocks the others."""
     results: dict[str, CreatedTicket] = {}
+    existing = dict(known or {})
+    try:
+        for ref in await jira.find_by_label(project_key, run_label(run_id)):
+            for draft in drafts:
+                if draft_label(run_id, draft.temp_id) in ref.labels:
+                    existing.setdefault(draft.temp_id, ref)
+    except ProviderError as e:
+        # Without the search we cannot rule out duplicates for drafts not stored locally.
+        for d in drafts:
+            if d.temp_id not in existing:
+                results[d.temp_id] = CreatedTicket(
+                    temp_id=d.temp_id, error=f"Could not check for existing issues: {e}"
+                )
+
     pending: list[TicketDraft] = []
     for draft in drafts:
-        try:
-            existing = await jira.find_by_label(draft_label(run_id, draft.temp_id))
-        except ProviderError as e:
-            results[draft.temp_id] = CreatedTicket(temp_id=draft.temp_id, error=str(e))
+        if draft.temp_id in results:
             continue
-        if existing:
+        found = existing.get(draft.temp_id)
+        if found is not None:
             results[draft.temp_id] = CreatedTicket(
-                temp_id=draft.temp_id, key=existing[0].key, url=existing[0].url, existed=True
+                temp_id=draft.temp_id, key=found.key, url=found.url, existed=True
             )
         else:
             pending.append(draft)
@@ -97,3 +158,23 @@ async def create_approved_tickets(
                 )
 
     return [results[d.temp_id] for d in drafts]
+
+
+async def assign_to_sprint(
+    jira: JiraProvider, sprint_id: int, created: list[CreatedTicket]
+) -> SprintResult:
+    """Add created (or existing) issues to the sprint. Failure leaves them in the backlog."""
+    keys = [c.key for c in created if c.key]
+    added: list[str] = []
+    for start in range(0, len(keys), CHUNK_SIZE):
+        chunk = keys[start : start + CHUNK_SIZE]
+        try:
+            await jira.add_to_sprint(sprint_id, chunk)
+        except ProviderError as e:
+            return SprintResult(
+                sprint_id=sprint_id,
+                added=added,
+                error=f"{e}. The remaining issues stay in the backlog.",
+            )
+        added.extend(chunk)
+    return SprintResult(sprint_id=sprint_id, added=added)

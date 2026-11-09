@@ -1,4 +1,4 @@
-"""Provider interfaces. Implementations: fakes (M1), GitHub/GitLab (M3), Jira (M4).
+"""Provider interfaces. Implementations: fakes (M1), GitHub (M3), Jira Cloud (M4).
 
 Providers are built from settings when needed and never stored in graph state.
 """
@@ -86,6 +86,14 @@ class NewIssue(BaseModel):
 class IssueRef(BaseModel):
     key: str
     url: str
+    labels: list[str] = []
+
+
+class Sprint(BaseModel):
+    id: int
+    name: str
+    state: str  # "active" | "future"
+    board: str | None = None
 
 
 class CreateOutcome(BaseModel):
@@ -105,8 +113,18 @@ class JiraProvider(Protocol):
         self, project_key: str, issue_type_id: str
     ) -> list[CreateField]: ...
 
-    async def find_by_label(self, label: str) -> list[IssueRef]: ...
+    async def find_by_label(self, project_key: str, label: str) -> list[IssueRef]:
+        """Issues in the project carrying `label`, with their labels."""
+        ...
 
-    async def create_issues(
-        self, project_key: str, issues: list[NewIssue]
-    ) -> list[CreateOutcome]: ...
+    async def create_issues(self, project_key: str, issues: list[NewIssue]) -> list[CreateOutcome]:
+        """At most 50 issues. One outcome per issue, in order; failures do not raise."""
+        ...
+
+    async def list_sprints(self, project_key: str) -> list[Sprint]:
+        """Active and future sprints on the project's boards."""
+        ...
+
+    async def add_to_sprint(self, sprint_id: int, issue_keys: list[str]) -> None:
+        """At most 50 keys per call."""
+        ...

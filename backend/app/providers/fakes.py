@@ -19,6 +19,7 @@ from app.providers.base import (
     NewIssue,
     ProviderError,
     Repo,
+    Sprint,
 )
 from app.providers.filters import looks_binary, should_skip
 
@@ -81,6 +82,10 @@ class FakeJiraProvider:
         JiraIssueType(id="10003", name="Bug"),
         JiraIssueType(id="10004", name="Sub-task", subtask=True),
     )
+    SPRINTS = (
+        Sprint(id=1, name="DEMO Sprint 1", state="active", board="DEMO board"),
+        Sprint(id=2, name="DEMO Sprint 2", state="future", board="DEMO board"),
+    )
 
     def __init__(self, store_path: Path, base_url: str = "https://fake-jira.local") -> None:
         self.store_path = store_path
@@ -108,10 +113,14 @@ class FakeJiraProvider:
             CreateField(id="labels", name="Labels", required=False),
         ]
 
-    async def find_by_label(self, label: str) -> list[IssueRef]:
-        self._record("find_by_label", label=label)
+    async def find_by_label(self, project_key: str, label: str) -> list[IssueRef]:
+        self._record("find_by_label", project_key=project_key, label=label)
         issues = self._load()["issues"]
-        return [self._ref(i["key"]) for i in issues if label in i["labels"]]
+        return [
+            self._ref(i["key"], i["labels"])
+            for i in issues
+            if label in i["labels"] and i["key"].startswith(f"{project_key}-")
+        ]
 
     async def create_issues(self, project_key: str, issues: list[NewIssue]) -> list[CreateOutcome]:
         self._record("create_issues", project_key=project_key, count=len(issues))
@@ -127,13 +136,29 @@ class FakeJiraProvider:
             self._save(store)
         return outcomes
 
+    async def list_sprints(self, project_key: str) -> list[Sprint]:
+        self._record("list_sprints", project_key=project_key)
+        self._check_project(project_key)
+        return list(self.SPRINTS)
+
+    async def add_to_sprint(self, sprint_id: int, issue_keys: list[str]) -> None:
+        self._record("add_to_sprint", sprint_id=sprint_id, count=len(issue_keys))
+        if sprint_id not in {s.id for s in self.SPRINTS}:
+            raise ProviderError(f"Sprint {sprint_id} not found")
+        with self._lock:
+            store = self._load()
+            for issue in store["issues"]:
+                if issue["key"] in issue_keys:
+                    issue["sprint_id"] = sprint_id
+            self._save(store)
+
     def stored_issues(self) -> list[dict[str, Any]]:
         """Test/debug helper."""
         issues: list[dict[str, Any]] = self._load()["issues"]
         return issues
 
-    def _ref(self, key: str) -> IssueRef:
-        return IssueRef(key=key, url=f"{self.base_url}/browse/{key}")
+    def _ref(self, key: str, labels: list[str] | None = None) -> IssueRef:
+        return IssueRef(key=key, url=f"{self.base_url}/browse/{key}", labels=labels or [])
 
     def _check_project(self, project_key: str) -> None:
         if project_key not in {p.key for p in self.PROJECTS}:

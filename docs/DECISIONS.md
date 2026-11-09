@@ -110,14 +110,27 @@ First real run: a mobile-onboarding meeting against a web fleet-admin repository
 - The user can **re-run with another repository** (`POST /runs/{id}/rerun`). This copies the transcript and screenshots, carries over the meeting analysis and requirements (those nodes skip when their output is already in state), and closes the old run as cancelled. The user can also **draft anyway** (`POST /runs/{id}/code-fit`), or **stop** (Reject at this stage does the same).
 - The 25% threshold is a first guess, to be tuned in M5.
 
+## D19. Jira Cloud provider (2026-11-09, M4)
+
+Checked against Atlassian's published OpenAPI specs (platform v3 and Agile 1.0) on 2026-11-09.
+
+- HTTP Basic with `JIRA_EMAIL` and `JIRA_API_TOKEN`. `JIRA_BASE_URL` is trimmed to `https://<host>`, so a pasted board URL works.
+- Reads: `/rest/api/3/project/search`, `/rest/api/3/issue/createmeta/{project}/issuetypes[/{id}]` (offset paging; fields carry `required` and `hasDefaultValue`), `/rest/api/3/search/jql` (token paging). The deprecated `GET /rest/api/3/search` and the old `createmeta` are not used. Response keys of the createmeta pages are read defensively (`issueTypes`/`values`, `fields`/`results`) because the schema lists more than one.
+- **Required fields.** A field blocks creation when it is required, has no default, and is not one the app fills (`summary`, `issuetype`, `project`, `description`, `labels`, `reporter`). Sub-task types are refused (they need a parent). The check runs when a run is started (HTTP 400 listing the fields per issue type, nothing stored) and again in `create_tickets` before any write.
+- **Create.** `POST /rest/api/3/issue/bulk`, at most 50 per call. 201 means some succeeded, 400 means all failed; per-item errors are mapped by `failedElementNumber`, so one failing ticket is reported and the others are created. Unknown issue types are rejected locally. Creates are retried only on 429 (nothing was processed); a 5xx or timeout is reported, not retried, because issues may already exist.
+- **Idempotency.** One search for `project = KEY AND labels = "mtj-<run>"`, matched to drafts by their `mtj-<run>-<temp_id>` label. Because Jira's search can lag behind recent writes (documented), Jira keys already stored in the local `drafts` table also count as existing.
+- **Descriptions** are converted to ADF: paragraphs, hard breaks, bullet lists, and a bold line before a list. Text is never parsed as markup.
+- **Sprints** (`JIRA_SPRINTS_ENABLED`, default on): boards from `/rest/agile/1.0/board?projectKeyOrId=`, sprints in state `active,future` from scrum boards only (kanban boards have none), add with `POST /rest/agile/1.0/sprint/{id}/issue` in chunks of 50. The sprint can be chosen on New run and changed in the approve dialog; an explicit "no sprint" at approval wins. A failure leaves issues in the backlog and is shown on the run.
+- Not built: retrying only the failed tickets of a completed run. Approving again is not possible once the run is completed, so a failed ticket has to be created by hand for now.
+
 ## VERIFY items
 
 | Item (spec section) | Status |
 |---|---|
 | SQLite checkpointer package and class (5) | Resolved (M2): package `langgraph-checkpoint-sqlite` 3.1, class `langgraph.checkpoint.sqlite.aio.AsyncSqliteSaver` (`from_conn_string`) |
 | GitLab token scope for the tree endpoint (6.2) | Deferred: GitLab is not built yet (D16) |
-| How the new createmeta endpoints mark required fields (6.3) | Open, M4 |
-| API-token Basic auth on Agile (sprint) endpoints (6.3) | Open, M4 |
+| How the new createmeta endpoints mark required fields (6.3) | Resolved (M4): each field has `required` and `hasDefaultValue` (D19) |
+| API-token Basic auth on Agile (sprint) endpoints (6.3) | Open: the spec does not say; confirm on the first run against a real site |
 | LangGraph `interrupt` / `Command(resume=...)` API (7.2) | Resolved (M2): `from langgraph.types import interrupt, Command` in langgraph 1.2; resume re-runs the node from its start; tested across a checkpointer restart |
 | GitHub fine-grained token permission for trees and contents (6.2) | Docs pages do not state it; *Contents: Read-only* is GitHub's documented permission for repository contents. Confirm on the first real run |
 | Anthropic structured outputs usage (7.3) | Resolved (M2): see D11. Checked against the installed SDK only; no call to the real API has been made yet |

@@ -115,6 +115,7 @@ export interface RunDetail {
   files_read: string[];
   drafts: DraftView[];
   created: CreatedTicket[];
+  sprint: SprintOutcome | null;
   tokens_used: number;
   jira_labels: string[];
   review_stage: 'code_fit' | 'drafts' | null;
@@ -145,6 +146,19 @@ export interface JiraIssueType {
   id: string;
   name: string;
   subtask: boolean;
+}
+
+export interface Sprint {
+  id: number;
+  name: string;
+  state: string;
+  board: string | null;
+}
+
+export interface SprintOutcome {
+  sprint_id: number;
+  added: string[];
+  error: string | null;
 }
 
 export interface Estimate {

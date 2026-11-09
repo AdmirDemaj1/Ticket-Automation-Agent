@@ -10,9 +10,9 @@ Runs on your own machine. Spec: [Claude-Reference.md](Claude-Reference.md). Deci
 |---|---|
 | M1 Skeleton and fakes | Done |
 | M2 Pipeline end to end on fixtures | Done |
-| M3 Real code provider (GitHub; GitLab later) | Done, pending a run on a real repo |
-| M4 Real Jira | Next |
-| M5 Real-meeting trial | Not started |
+| M3 Real code provider (GitHub; GitLab later) | Done |
+| M4 Real Jira | Done, pending a run on a real site |
+| M5 Real-meeting trial | Next |
 | M6 Hardening | Not started |
 
 ## Quick start (fake providers, no accounts)
@@ -52,7 +52,11 @@ Edit `.env`. The backend refuses to start and lists what is missing if a provide
 - **Claude:** `LLM_PROVIDER=anthropic` and `ANTHROPIC_API_KEY`. The model comes from `ANTHROPIC_MODEL` (default `claude-opus-5-5`), depth from `ANTHROPIC_EFFORT` (default `medium`). Each run stops at `MAX_LLM_TOKENS_PER_RUN`; the New Run page shows an estimate first.
 - **GitHub:** `CODE_PROVIDER=github` and `GITHUB_TOKEN`. Create a [fine-grained personal access token](https://github.com/settings/personal-access-tokens/new) with *Repository access: Only select repositories* and *Repository permissions > Contents: Read-only*. Nothing else is needed. The repository picker lists exactly the repositories the token can see. The app only sends GET requests, never uses GitHub's code search, and reads at most `MAX_CODE_FILES` files and `MAX_TOTAL_CODE_BYTES` bytes per run.
 - **GitLab:** not implemented yet (`CODE_PROVIDER=gitlab` returns a clear error). Planned: `GITLAB_BASE_URL` and `GITLAB_TOKEN` with scope `read_api`.
-- **Jira Cloud:** `JIRA_PROVIDER=jira`, `JIRA_BASE_URL`, `JIRA_EMAIL` and `JIRA_API_TOKEN` from https://id.atlassian.com/manage-profile/security/api-tokens. The token can do anything your Jira user can, so prefer a dedicated user. (M4.)
+- **Jira Cloud:** `JIRA_PROVIDER=jira`, `JIRA_BASE_URL` (for example `https://yoursite.atlassian.net`), `JIRA_EMAIL` and `JIRA_API_TOKEN` from https://id.atlassian.com/manage-profile/security/api-tokens. The token can do anything your Jira user can, so prefer a test project or a dedicated user.
+  - Before a run starts, the app checks the project's required fields. If Jira requires fields it cannot fill (for example *Team* or *Components*), it says which ones, per issue type, and creates nothing.
+  - Descriptions are sent in Atlassian Document Format, with acceptance criteria as a bullet list.
+  - Every issue gets the labels `mtj-<run id>` and `mtj-<run id>-<draft id>`; approving again skips issues that exist.
+  - Pick a sprint on New run or when approving (scrum boards only; `JIRA_SPRINTS_ENABLED=false` turns this off). If adding to the sprint fails, the issues stay in the backlog and the run says why.
 
 ## Develop
 

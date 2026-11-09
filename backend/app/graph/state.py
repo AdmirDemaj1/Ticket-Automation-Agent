@@ -25,5 +25,6 @@ class RunState(TypedDict, total=False):
     drafts: list[dict[str, Any]]  # TicketDraft
     review: dict[str, Any] | None  # ReviewDecision, set on resume
     created: list[dict[str, Any]]  # CreatedTicket
+    sprint: dict[str, Any] | None  # {sprint_id, added, error} when a sprint was chosen
     tokens_used: int
     errors: list[str]

@@ -36,6 +36,8 @@ function routes(extra: Record<string, Parameters<typeof mockFetch>[0][string]> =
       json({ tokens: 25000, max_tokens_per_run: 300000 }),
     [`GET /api/runs/estimate?transcript_chars=${TEXT.length}&screenshots=2`]: () =>
       json({ tokens: 28200, max_tokens_per_run: 300000 }),
+    'GET /api/jira/projects/DEMO/sprints': () =>
+      json([{ id: 6, name: 'DEMO Sprint 1', state: 'active', board: 'DEMO board' }]),
     'POST /api/runs': () => json({ run_id: 'r1' }, 202),
     ...extra,
   });
@@ -67,6 +69,8 @@ it('starts a run with pasted text and the chosen targets', async () => {
   await waitFor(() => expect(screen.getByRole('checkbox', { name: 'Story' })).toBeChecked());
   expect(screen.getByRole('checkbox', { name: 'Sub-task' })).not.toBeChecked();
   await user.click(screen.getByRole('checkbox', { name: 'Bug' }));
+  await screen.findByRole('option', { name: 'DEMO Sprint 1 (active, DEMO board)' });
+  await user.selectOptions(screen.getByLabelText('Sprint (optional)'), '6');
   await user.click(screen.getByRole('checkbox', { name: /I am allowed to share them/ }));
   await user.click(screen.getByRole('button', { name: 'Start' }));
 
@@ -80,7 +84,7 @@ it('starts a run with pasted text and the chosen targets', async () => {
     branch: 'main',
     jira_project_key: 'DEMO',
     issue_types: ['Story', 'Task'],
-    sprint_id: null,
+    sprint_id: 6,
   });
   expect(body.get('transcript_text')).toBe(TEXT);
   expect(body.get('transcript_file')).toBeNull();

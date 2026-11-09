@@ -7,8 +7,9 @@ browser, stored in the database, or placed in graph state.
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal, Self
+from urllib.parse import urlsplit
 
-from pydantic import Field, SecretStr, ValidationError, model_validator
+from pydantic import Field, SecretStr, ValidationError, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -47,6 +48,8 @@ class Settings(BaseSettings):
     jira_base_url: str | None = None
     jira_email: str | None = None
     jira_api_token: SecretStr | None = None
+    # Offer active/future sprints and add approved issues to the chosen one (Agile API).
+    jira_sprints_enabled: bool = True
 
     # Limits
     max_code_files: int = Field(default=60, gt=0)
@@ -61,6 +64,17 @@ class Settings(BaseSettings):
     fixtures_dir: Path = REPO_ROOT / "fixtures"
     frontend_origin: str = "http://localhost:5173"
     log_level: str = "INFO"
+
+    @field_validator("jira_base_url")
+    @classmethod
+    def _site_root(cls, value: str | None) -> str | None:
+        """Keep only https://<site>, so a pasted board or issue URL also works."""
+        if not value or not value.strip():
+            return None
+        parsed = urlsplit(value.strip())
+        if parsed.scheme != "https" or not parsed.netloc:
+            raise ValueError("JIRA_BASE_URL must look like https://yoursite.atlassian.net")
+        return f"https://{parsed.netloc}"
 
     @model_validator(mode="after")
     def _check_provider_credentials(self) -> Self:

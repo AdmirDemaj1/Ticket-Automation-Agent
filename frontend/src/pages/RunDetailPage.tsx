@@ -3,6 +3,7 @@ import { AlertTriangle, ExternalLink } from 'lucide-react';
 import { useState, type KeyboardEvent, type ReactNode } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { CodeFitPanel } from '@/components/run/CodeFitPanel';
+import { Picker } from '@/components/run/Picker';
 import { DraftEditor } from '@/components/run/DraftEditor';
 import { StatusBadge } from '@/components/run/StatusBadge';
 import { Badge, type BadgeProps } from '@/components/ui/badge';
@@ -10,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardDescription, CardTitle } from '@/components/ui/card';
 import { apiFetch } from '@/lib/api';
 import { cleanDraft } from '@/lib/drafts';
-import { type CodeFinding, type Run, type RunDetail, type TicketDraft } from '@/lib/types';
+import type { CodeFinding, Run, RunDetail, Sprint, TicketDraft } from '@/lib/types';
 import { useRunEvents } from '@/lib/useRunEvents';
 import { cn } from '@/lib/utils';
 
@@ -174,6 +175,17 @@ function CreatedList({ detail }: { detail: RunDetail }) {
           </li>
         ))}
       </ul>
+      {detail.sprint &&
+        (detail.sprint.error ? (
+          <p role="alert" className="mt-2 text-sm text-warning">
+            Sprint: {detail.sprint.error}
+          </p>
+        ) : (
+          <p className="mt-2 text-sm text-muted-foreground">
+            {detail.sprint.added.length} issue{detail.sprint.added.length === 1 ? '' : 's'} added to
+            the sprint.
+          </p>
+        ))}
     </Card>
   );
 }
@@ -392,6 +404,15 @@ function DraftsTab({
     () => new Set(detail.drafts.filter((d) => d.draft.selected).map((d) => d.draft.temp_id)),
   );
   const [confirming, setConfirming] = useState(false);
+  const [sprint, setSprint] = useState(
+    detail.run.inputs.sprint_id != null ? String(detail.run.inputs.sprint_id) : '',
+  );
+  const project = detail.run.inputs.jira_project_key;
+  const sprints = useQuery({
+    queryKey: ['sprints', project],
+    queryFn: () => apiFetch<Sprint[]>(`/jira/projects/${encodeURIComponent(project)}/sprints`),
+    enabled: reviewing,
+  });
   const dirtyIds = Object.keys(edits);
   const issueTypes = detail.run.inputs.issue_types;
 
@@ -416,7 +437,10 @@ function DraftsTab({
     mutationFn: () =>
       apiFetch<Run>(`/runs/${runId}/approve`, {
         method: 'POST',
-        body: JSON.stringify({ selected: [...selected] }),
+        body: JSON.stringify({
+          selected: [...selected],
+          sprint_id: sprint ? Number(sprint) : null,
+        }),
       }),
     onSuccess: async () => {
       setConfirming(false);
@@ -483,6 +507,21 @@ function DraftsTab({
             This creates <strong>{count}</strong> issue{count === 1 ? '' : 's'} in Jira project{' '}
             <strong>{detail.run.inputs.jira_project_key}</strong>.
           </p>
+          <Picker
+            id="approve-sprint"
+            label="Sprint"
+            value={sprint}
+            onChange={setSprint}
+            options={[
+              { value: '', label: 'No sprint: leave in the backlog' },
+              ...(sprints.data ?? []).map((s) => ({
+                value: String(s.id),
+                label: `${s.name} (${s.state})`,
+              })),
+            ]}
+            loading={sprints.isPending}
+            error={sprints.error?.message}
+          />
           <p className="text-muted-foreground">
             Each issue gets the labels <code>{detail.jira_labels[0]}</code> and{' '}
             <code>{detail.jira_labels[1]}</code>, so approving again never creates duplicates.

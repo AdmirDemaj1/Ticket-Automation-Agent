@@ -222,3 +222,32 @@ def test_estimate(client: TestClient) -> None:
 def test_unknown_run_is_404(client: TestClient) -> None:
     assert client.get("/runs/nope").status_code == 404
     assert client.get("/runs/nope/events").status_code == 404
+
+
+@pytest.mark.parametrize(
+    ("approve_body", "expected_sprint"),
+    [
+        ({"selected": ["T1"]}, 2),  # no field: the sprint chosen at the start
+        ({"selected": ["T1"], "sprint_id": 1}, 1),  # changed at approval
+        ({"selected": ["T1"], "sprint_id": None}, None),  # explicitly the backlog
+    ],
+)
+def test_sprint_choice_at_approval(
+    client: TestClient, approve_body: dict[str, Any], expected_sprint: int | None
+) -> None:
+    res = client.post(
+        "/runs",
+        data={
+            "inputs": json.dumps({**DEMO_INPUTS, "sprint_id": 2}),
+            "transcript_text": "Anna: Add CSV export.\nMarco: Agreed.\nAnna: Thanks.",
+        },
+    )
+    run_id = res.json()["run_id"]
+    wait_for(client, run_id)
+    assert client.post(f"/runs/{run_id}/approve", json=approve_body).status_code == 202
+    done = wait_for(client, run_id, ("completed", "failed"))
+    assert done["run"]["status"] == "completed", done["run"]["error"]
+    sprint = done["sprint"]
+    assert (sprint["sprint_id"] if sprint else None) == expected_sprint
+    if sprint:
+        assert sprint["added"] == ["DEMO-1"] and sprint["error"] is None

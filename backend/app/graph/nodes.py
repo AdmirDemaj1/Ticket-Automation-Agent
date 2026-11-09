@@ -40,10 +40,14 @@ from app.models import (
     Transcript,
 )
 from app.prompts import system_prompt
-from app.providers.base import CodeProvider, FileEntry, JiraProvider
+from app.providers.base import CodeProvider, FileEntry, IssueRef, JiraProvider
 from app.providers.transcript import ManualUploadProvider, render_transcript
 from app.services.search import render_hits
-from app.services.tickets import create_approved_tickets
+from app.services.tickets import (
+    assign_to_sprint,
+    check_required_fields,
+    create_approved_tickets,
+)
 
 TREE_LISTING_LIMIT = 1500
 MAX_REQUIREMENTS = 40
@@ -281,12 +285,27 @@ class Nodes:
             raise ApprovalRequired("create_tickets refused: the review was not an approval")
         selected = [d for d in review.drafts if d.selected]
         inputs = RunInputs.model_validate(state["inputs"])
+        run_id = state["run_id"]
+        jira = self.deps.jira()
+        # Before any write: fail with a readable list if Jira needs fields we cannot fill.
+        await check_required_fields(jira, inputs.jira_project_key, [d.type for d in selected])
+        # Keys stored by an earlier attempt cover Jira's search lag.
+        known = {
+            r.draft.temp_id: IssueRef(key=r.jira_key, url=r.jira_url)
+            for r in self.deps.db.list_drafts(run_id)
+            if r.jira_key and r.jira_url
+        }
         created = await create_approved_tickets(
-            self.deps.jira(), inputs.jira_project_key, state["run_id"], selected
+            jira, inputs.jira_project_key, run_id, selected, known
         )
         for c in created:
             if c.key and c.url:
-                self.deps.db.set_draft_jira(state["run_id"], c.temp_id, c.key, c.url)
+                self.deps.db.set_draft_jira(run_id, c.temp_id, c.key, c.url)
+        sprint: dict[str, Any] | None = None
+        sprint_id = review.sprint_id
+        if sprint_id is not None and self.deps.settings.jira_sprints_enabled:
+            result = await assign_to_sprint(jira, sprint_id, created)
+            sprint = {"sprint_id": result.sprint_id, "added": result.added, "error": result.error}
         failed = sum(1 for c in created if c.error)
         existed = sum(1 for c in created if c.existed)
         made = len(created) - failed - existed
@@ -295,7 +314,13 @@ class Nodes:
             summary += f", {existed} already existed"
         if failed:
             summary += f", {failed} failed"
-        return {"created": [c.model_dump() for c in created], "_summary": summary}
+        if sprint:
+            summary += (
+                f"; sprint: {sprint['error']}"
+                if sprint["error"]
+                else f"; {len(sprint['added'])} added to the sprint"
+            )
+        return {"created": [c.model_dump() for c in created], "sprint": sprint, "_summary": summary}
 
     async def finalize(self, state: RunState) -> dict[str, Any]:
         return {}

@@ -15,6 +15,7 @@ import type {
   JiraIssueType,
   JiraProject,
   Repo,
+  Sprint,
   TicketType,
 } from '@/lib/types';
 
@@ -53,6 +54,7 @@ export function NewRunPage() {
   const [branch, setBranch] = useState('');
   const [project, setProject] = useState('');
   const [issueTypes, setIssueTypes] = useState<TicketType[] | null>(null);
+  const [sprint, setSprint] = useState('');
   const [consent, setConsent] = useState(false);
   const [formErrors, setFormErrors] = useState<string[]>([]);
 
@@ -89,6 +91,12 @@ export function NewRunPage() {
   const availableTypes = (types.data ?? [])
     .map((t) => t.name)
     .filter((n): n is TicketType => ['Story', 'Task', 'Bug', 'Sub-task'].includes(n));
+  const sprints = useQuery({
+    queryKey: ['sprints', selectedProject],
+    queryFn: () =>
+      apiFetch<Sprint[]>(`/jira/projects/${encodeURIComponent(selectedProject)}/sprints`),
+    enabled: Boolean(selectedProject),
+  });
   const chosenTypes =
     issueTypes?.filter((t) => availableTypes.includes(t)) ??
     DEFAULT_TYPES.filter((t) => availableTypes.includes(t));
@@ -177,7 +185,7 @@ export function NewRunPage() {
         branch: selectedBranch,
         jira_project_key: selectedProject,
         issue_types: chosenTypes,
-        sprint_id: null,
+        sprint_id: sprint ? Number(sprint) : null,
       }),
     );
     if (mode === 'upload' && transcriptFile) body.set('transcript_file', transcriptFile);
@@ -366,6 +374,7 @@ export function NewRunPage() {
             onChange={(v) => {
               setProject(v);
               setIssueTypes(null);
+              setSprint('');
             }}
             options={(projects.data ?? []).map((p) => ({
               value: p.key,
@@ -394,8 +403,23 @@ export function NewRunPage() {
               ))}
             </div>
           </fieldset>
-          <p className="text-xs text-muted-foreground sm:col-span-2">
-            Sprint assignment arrives with real Jira (milestone M4); tickets go to the backlog.
+          <Picker
+            id={`${ids}-sprint`}
+            label="Sprint (optional)"
+            value={sprint}
+            onChange={setSprint}
+            options={[
+              { value: '', label: 'No sprint: leave in the backlog' },
+              ...(sprints.data ?? []).map((s) => ({
+                value: String(s.id),
+                label: `${s.name} (${s.state}${s.board ? `, ${s.board}` : ''})`,
+              })),
+            ]}
+            loading={sprints.isPending && Boolean(selectedProject)}
+            error={sprints.error?.message}
+          />
+          <p className="self-end text-xs text-muted-foreground">
+            You can still change the sprint when you approve.
           </p>
         </fieldset>
       </Card>

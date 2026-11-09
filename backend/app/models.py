@@ -175,6 +175,7 @@ class ReviewDecision(BaseModel):
 
     decision: Literal["approve", "reject"]
     drafts: list[TicketDraft] = Field(default_factory=list)
+    sprint_id: int | None = None
 
 
 class CreatedTicket(BaseModel):

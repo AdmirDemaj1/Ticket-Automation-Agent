@@ -38,6 +38,7 @@ from app.providers.base import (
     ProviderError,
     ProviderNotAvailable,
     Repo,
+    Sprint,
 )
 from app.providers.factory import get_code_provider, get_jira_provider
 from app.services.intake import (
@@ -174,6 +175,12 @@ class DraftView(BaseModel):
     jira_url: str | None
 
 
+class SprintOutcome(BaseModel):
+    sprint_id: int
+    added: list[str]
+    error: str | None
+
+
 class RunDetail(BaseModel):
     run: Run
     transcript_title: str | None
@@ -184,6 +191,7 @@ class RunDetail(BaseModel):
     files_read: list[str]
     drafts: list[DraftView]
     created: list[CreatedTicket]
+    sprint: SprintOutcome | None
     tokens_used: int
     jira_labels: list[str]
     review_stage: ReviewStage | None
@@ -257,6 +265,13 @@ def _register_routes(app: FastAPI) -> None:
     async def jira_issue_types(key: str, jira: JiraDep) -> list[JiraIssueType]:
         return await jira.list_issue_types(key)
 
+    @app.get("/jira/projects/{key}/sprints")
+    async def jira_sprints(key: str, jira: JiraDep, settings: SettingsDep) -> list[Sprint]:
+        """Active and future sprints. Empty when sprint support is turned off."""
+        if not settings.jira_sprints_enabled:
+            return []
+        return await jira.list_sprints(key)
+
     @app.get("/runs/estimate")
     async def run_estimate(
         settings: SettingsDep, transcript_chars: int = 0, screenshots: int = 0
@@ -321,6 +336,7 @@ def _register_routes(app: FastAPI) -> None:
             files_read=sorted((values.get("code_files") or {}).keys()),
             drafts=[_draft_view(d) for d in db.list_drafts(run_id)],
             created=[CreatedTicket.model_validate(c) for c in values.get("created", [])],
+            sprint=SprintOutcome.model_validate(values["sprint"]) if values.get("sprint") else None,
             tokens_used=int(values.get("tokens_used", 0)),
             jira_labels=[run_label(run_id), f"{run_label(run_id)}-<draft id>"],
             review_stage=await runs.stage(run_id) if run.status == "awaiting_review" else None,
@@ -389,7 +405,10 @@ def _register_routes(app: FastAPI) -> None:
             r.draft.model_copy(update={"selected": r.draft.temp_id in selected}) for r in rows
         ]
         db.save_draft_edits(run_id, drafts)
-        runs.approve(run_id, ReviewDecision(decision="approve", drafts=drafts))
+        run = _get_run(db, run_id)
+        # An explicit sprint_id (even null: "backlog") wins over the choice made at the start.
+        sprint_id = body.sprint_id if "sprint_id" in body.model_fields_set else run.inputs.sprint_id
+        runs.approve(run_id, ReviewDecision(decision="approve", drafts=drafts, sprint_id=sprint_id))
         return _get_run(db, run_id)
 
     @app.post("/runs/{run_id}/reject", status_code=202)
