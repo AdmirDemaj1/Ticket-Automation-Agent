@@ -12,6 +12,7 @@ export function renderWithProviders(
     <Routes>
       <Route path={path} element={ui} />
       <Route path="/" element={<p>runs page</p>} />
+      <Route path="*" element={<p>other page</p>} />
     </Routes>
   );
   return render(

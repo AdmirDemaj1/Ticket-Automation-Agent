@@ -1,0 +1,38 @@
+{
+  "screens": [
+    {
+      "screen": "Login",
+      "feedback": [
+        "Users keep asking how to reset their password.",
+        "A wrong password currently shows a red banner at the top of the form."
+      ],
+      "decisions": [
+        "Add a \"Forgot password?\" link under the password field that opens a reset page where users enter their email.",
+        "Show login errors inline, in red text under the field; keep the banner only for network errors."
+      ],
+      "actions": [
+        "Build the \"Forgot password?\" link and reset page UI this sprint (the backend reset endpoint already exists).",
+        "Move credential errors inline under the field."
+      ],
+      "open_questions": [
+        "Is the show/hide password toggle from the design already implemented? Luca thinks it was added last sprint but is not sure."
+      ]
+    },
+    {
+      "screen": "Dashboard",
+      "feedback": ["The orders table stays as it is.", "The orders API call is hardcoded to 7 days."],
+      "decisions": [
+        "Add a date range filter above the table: last 7, 30 and 90 days, plus a custom range with two date pickers. Default stays 7 days.",
+        "Add an \"Export CSV\" button next to the filter that exports exactly the rows shown for the selected range. High priority: finance asked twice.",
+        "Show an empty state with a short message when there are no orders."
+      ],
+      "actions": [
+        "Add a date range parameter to the orders API call.",
+        "Build the date range filter, the CSV export and the empty state."
+      ],
+      "open_questions": []
+    }
+  ],
+  "parked": ["Dark mode: postponed to a later sprint."],
+  "notes": []
+}

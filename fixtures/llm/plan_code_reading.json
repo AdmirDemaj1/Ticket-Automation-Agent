@@ -1,0 +1,10 @@
+{
+  "paths": [
+    "src/pages/Login.tsx",
+    "src/api/auth.ts",
+    "src/pages/Dashboard.tsx",
+    "src/api/orders.ts",
+    "src/components/Button.tsx",
+    "src/App.tsx"
+  ]
+}

@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
+import { StatusBadge } from '@/components/run/StatusBadge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { apiFetch } from '@/lib/api';
@@ -43,12 +44,18 @@ export function RunsPage() {
           <tbody>
             {runs.data.map((run) => (
               <tr key={run.id} className="border-t border-border">
-                <td className="py-2">{new Date(run.created_at).toLocaleString()}</td>
+                <td className="py-2">
+                  <Link to={`/runs/${run.id}`} className="text-primary hover:underline">
+                    {new Date(run.created_at).toLocaleString()}
+                  </Link>
+                </td>
                 <td className="py-2">
                   {run.inputs.repo} @ {run.inputs.branch}
                 </td>
                 <td className="py-2">{run.inputs.jira_project_key}</td>
-                <td className="py-2">{run.status.replace('_', ' ')}</td>
+                <td className="py-2">
+                  <StatusBadge status={run.status} />
+                </td>
               </tr>
             ))}
           </tbody>

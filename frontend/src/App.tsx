@@ -1,6 +1,7 @@
 import { NavLink, Route, Routes } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { NewRunPage } from '@/pages/NewRunPage';
+import { RunDetailPage } from '@/pages/RunDetailPage';
 import { RunsPage } from '@/pages/RunsPage';
 import { StatusPage } from '@/pages/StatusPage';
 
@@ -31,6 +32,7 @@ export function App() {
         <Routes>
           <Route path="/" element={<RunsPage />} />
           <Route path="/runs/new" element={<NewRunPage />} />
+          <Route path="/runs/:runId" element={<RunDetailPage />} />
           <Route path="/status" element={<StatusPage />} />
         </Routes>
       </main>

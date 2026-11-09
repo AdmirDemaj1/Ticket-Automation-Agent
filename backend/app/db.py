@@ -15,7 +15,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from app.models import RUN_STATUSES, RunInputs, RunStatus
+from app.models import RUN_STATUSES, RunInputs, RunStatus, TicketDraft
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS runs (
@@ -66,6 +66,13 @@ class RunEvent(BaseModel):
     step: str
     level: EventLevel
     message: str
+
+
+class DraftRow(BaseModel):
+    draft: TicketDraft
+    edited: bool
+    jira_key: str | None
+    jira_url: str | None
 
 
 def _now() -> str:
@@ -153,6 +160,71 @@ class Database:
                 (run_id, after_id),
             ).fetchall()
         return [RunEvent(**dict(r)) for r in rows]
+
+    # --- drafts ---
+
+    def replace_drafts(self, run_id: str, drafts: list[TicketDraft]) -> None:
+        """Store freshly generated drafts, dropping any earlier ones for the run."""
+        with self.connect() as conn:
+            conn.execute("DELETE FROM drafts WHERE run_id = ?", (run_id,))
+            conn.executemany(
+                "INSERT INTO drafts (run_id, temp_id, json, selected, edited)"
+                " VALUES (?, ?, ?, ?, 0)",
+                [(run_id, d.temp_id, d.model_dump_json(), int(d.selected)) for d in drafts],
+            )
+
+    def list_drafts(self, run_id: str) -> list[DraftRow]:
+        with self.connect() as conn:
+            rows = conn.execute(
+                "SELECT * FROM drafts WHERE run_id = ? ORDER BY rowid", (run_id,)
+            ).fetchall()
+        return [_row_to_draft(r) for r in rows]
+
+    def save_draft_edits(self, run_id: str, drafts: list[TicketDraft]) -> None:
+        """Overwrite drafts the user edited. Every temp_id must already exist for the run."""
+        with self.connect() as conn:
+            current = {
+                r["temp_id"]: r["json"]
+                for r in conn.execute(
+                    "SELECT temp_id, json FROM drafts WHERE run_id = ?", (run_id,)
+                )
+            }
+            unknown = [d.temp_id for d in drafts if d.temp_id not in current]
+            if unknown:
+                raise KeyError(", ".join(unknown))
+            for d in drafts:
+                new_json = d.model_dump_json()
+                conn.execute(
+                    "UPDATE drafts SET json = ?, selected = ?,"
+                    " edited = MAX(edited, ?) WHERE run_id = ? AND temp_id = ?",
+                    (
+                        new_json,
+                        int(d.selected),
+                        int(_content_changed(current[d.temp_id], d)),
+                        run_id,
+                        d.temp_id,
+                    ),
+                )
+
+    def set_draft_jira(self, run_id: str, temp_id: str, key: str, url: str) -> None:
+        with self.connect() as conn:
+            conn.execute(
+                "UPDATE drafts SET jira_key = ?, jira_url = ? WHERE run_id = ? AND temp_id = ?",
+                (key, url, run_id, temp_id),
+            )
+
+
+def _content_changed(old_json: str, new: TicketDraft) -> bool:
+    old = TicketDraft.model_validate_json(old_json).model_dump(exclude={"selected"})
+    return old != new.model_dump(exclude={"selected"})
+
+
+def _row_to_draft(row: sqlite3.Row) -> DraftRow:
+    draft = TicketDraft.model_validate_json(row["json"])
+    draft = draft.model_copy(update={"selected": bool(row["selected"])})
+    return DraftRow(
+        draft=draft, edited=bool(row["edited"]), jira_key=row["jira_key"], jira_url=row["jira_url"]
+    )
 
 
 def _row_to_run(row: sqlite3.Row) -> Run:

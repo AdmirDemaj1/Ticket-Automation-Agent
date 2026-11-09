@@ -66,6 +66,9 @@ export function StatusPage() {
               value={
                 <span className="flex items-center gap-2">
                   <code className="text-xs">{config.data.llm.model}</code>
+                  {config.data.llm.provider === 'fake' && (
+                    <Badge ok={false}>fake: recorded responses</Badge>
+                  )}
                   <Badge ok={config.data.llm.api_key_set}>
                     {config.data.llm.api_key_set ? 'API key set' : 'No API key'}
                   </Badge>

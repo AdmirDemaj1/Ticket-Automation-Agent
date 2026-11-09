@@ -1,0 +1,106 @@
+{
+  "findings": [
+    {
+      "requirement_id": "R1",
+      "status": "missing",
+      "evidence": [
+        {
+          "path": "src/pages/Login.tsx",
+          "start_line": 28,
+          "end_line": 35,
+          "note": "The password field is followed only by the show/hide button; there is no reset link or route."
+        }
+      ],
+      "affected_files": ["src/pages/Login.tsx", "src/App.tsx"],
+      "confidence": "high"
+    },
+    {
+      "requirement_id": "R2",
+      "status": "implemented",
+      "evidence": [
+        {
+          "path": "src/pages/Login.tsx",
+          "start_line": 8,
+          "end_line": 8,
+          "note": "const [showPassword, setShowPassword] = useState(false);"
+        },
+        {
+          "path": "src/pages/Login.tsx",
+          "start_line": 31,
+          "end_line": 38,
+          "note": "type={showPassword ? 'text' : 'password'} and a button that toggles it: {showPassword ? 'Hide' : 'Show'} password"
+        }
+      ],
+      "affected_files": ["src/pages/Login.tsx"],
+      "confidence": "high"
+    },
+    {
+      "requirement_id": "R3",
+      "status": "partial",
+      "evidence": [
+        {
+          "path": "src/pages/Login.tsx",
+          "start_line": 22,
+          "end_line": 22,
+          "note": "{error && <div className=\"banner banner-error\">{error}</div>} shows every error as a top banner."
+        },
+        {
+          "path": "src/api/auth.ts",
+          "start_line": 7,
+          "end_line": 7,
+          "note": "if (!res.ok) throw new Error('Invalid email or password'); credential and network errors are not told apart."
+        }
+      ],
+      "affected_files": ["src/pages/Login.tsx", "src/api/auth.ts"],
+      "confidence": "high"
+    },
+    {
+      "requirement_id": "R4",
+      "status": "partial",
+      "evidence": [
+        {
+          "path": "src/api/orders.ts",
+          "start_line": 8,
+          "end_line": 13,
+          "note": "const DEFAULT_RANGE_DAYS = 7; fetchOrders() takes no range parameter."
+        },
+        {
+          "path": "src/pages/Dashboard.tsx",
+          "start_line": 15,
+          "end_line": 15,
+          "note": "<p className=\"muted\">Orders from the last 7 days</p>; no filter control."
+        }
+      ],
+      "affected_files": ["src/api/orders.ts", "src/pages/Dashboard.tsx"],
+      "confidence": "high"
+    },
+    {
+      "requirement_id": "R5",
+      "status": "missing",
+      "evidence": [
+        {
+          "path": "src/pages/Dashboard.tsx",
+          "start_line": 12,
+          "end_line": 37,
+          "note": "The dashboard renders a heading, an error line and the table; no export button."
+        }
+      ],
+      "affected_files": ["src/pages/Dashboard.tsx"],
+      "confidence": "high"
+    },
+    {
+      "requirement_id": "R6",
+      "status": "missing",
+      "evidence": [
+        {
+          "path": "src/pages/Dashboard.tsx",
+          "start_line": 26,
+          "end_line": 35,
+          "note": "orders.map(...) renders rows with no branch for an empty list."
+        }
+      ],
+      "affected_files": ["src/pages/Dashboard.tsx"],
+      "confidence": "high"
+    }
+  ]
+}

@@ -27,8 +27,12 @@ class Settings(BaseSettings):
     )
 
     # LLM
+    llm_provider: Literal["anthropic", "fake"] = "fake"
     anthropic_api_key: SecretStr | None = None
     anthropic_model: str = "claude-opus-5-5"
+    anthropic_effort: Literal["low", "medium", "high", "xhigh", "max"] = "medium"
+    # Server-side refusal fallback (beta). Turn off for models that don't support it.
+    anthropic_refusal_fallback: bool = True
     max_llm_tokens_per_run: int = Field(default=300_000, gt=0)
 
     # Code source
@@ -48,6 +52,8 @@ class Settings(BaseSettings):
     max_file_bytes: int = Field(default=200_000, gt=0)
     max_screenshots: int = Field(default=10, gt=0)
     max_screenshot_bytes: int = Field(default=8_000_000, gt=0)
+    max_total_code_bytes: int = Field(default=400_000, gt=0)
+    max_transcript_bytes: int = Field(default=2_000_000, gt=0)
 
     # Local paths and server
     data_dir: Path = REPO_ROOT / "data"
@@ -58,6 +64,8 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def _check_provider_credentials(self) -> Self:
         missing: list[str] = []
+        if self.llm_provider == "anthropic" and not _has(self.anthropic_api_key):
+            missing.append("ANTHROPIC_API_KEY (required when LLM_PROVIDER=anthropic)")
         if self.code_provider == "github" and not _has(self.github_token):
             missing.append("GITHUB_TOKEN (required when CODE_PROVIDER=github)")
         if self.code_provider == "gitlab" and not _has(self.gitlab_token):
@@ -80,6 +88,14 @@ class Settings(BaseSettings):
     @property
     def db_path(self) -> Path:
         return self.data_dir / "app.db"
+
+    @property
+    def checkpoint_path(self) -> Path:
+        return self.data_dir / "checkpoints.db"
+
+    @property
+    def fake_llm_dir(self) -> Path:
+        return self.fixtures_dir / "llm"
 
 
 def _has(secret: SecretStr | None) -> bool:

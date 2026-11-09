@@ -1,0 +1,94 @@
+{
+  "drafts": [
+    {
+      "type": "Story",
+      "title": "Login: add \"Forgot password?\" link and reset page",
+      "description": "Users keep asking how to reset their password. Add a \"Forgot password?\" link under the password field on the Login screen. It opens a reset page where the user enters their email and submits it to the existing reset endpoint (UI only; the backend already exists).\n\nToday the password field in src/pages/Login.tsx (lines 28-35) is followed only by the show/hide button.",
+      "acceptance_criteria": [
+        "A \"Forgot password?\" link appears under the password field on Login.",
+        "The link opens a reset page with an email field and a submit button.",
+        "Submitting calls the existing reset endpoint and shows a confirmation message.",
+        "The reset page links back to Login."
+      ],
+      "estimate": null,
+      "labels": ["login"],
+      "related_files": ["src/pages/Login.tsx", "src/App.tsx"],
+      "requirement_ids": ["R1"],
+      "status_in_code": "new"
+    },
+    {
+      "type": "Story",
+      "title": "Login: show credential errors inline under the field",
+      "description": "A wrong email or password should show an inline error in red text under the field, as in the design. Keep the top banner only for network errors.\n\nToday src/pages/Login.tsx line 22 shows every error as a banner, and src/api/auth.ts line 7 throws the same error for any failed response, so credential and network errors cannot be told apart.",
+      "acceptance_criteria": [
+        "A 401/invalid-credentials response shows red text under the password field, not a banner.",
+        "A network failure or server error still shows the top banner.",
+        "The inline error clears when the user edits the field."
+      ],
+      "estimate": null,
+      "labels": ["login"],
+      "related_files": ["src/pages/Login.tsx", "src/api/auth.ts"],
+      "requirement_ids": ["R3"],
+      "status_in_code": "extends_existing"
+    },
+    {
+      "type": "Story",
+      "title": "Dashboard: date range filter for orders (7/30/90 days, custom)",
+      "description": "Add a date range filter above the orders table with last 7, 30 and 90 days and a custom range with two date pickers. Default stays 7 days.\n\nThe range is hardcoded today: src/api/orders.ts lines 8-13 (DEFAULT_RANGE_DAYS = 7, fetchOrders() takes no parameter) and the caption in src/pages/Dashboard.tsx line 15. fetchOrders needs a range parameter.",
+      "acceptance_criteria": [
+        "The filter offers Last 7 days, Last 30 days, Last 90 days and Custom range.",
+        "Last 7 days is selected by default.",
+        "Custom range shows two date pickers; the end date cannot be before the start date.",
+        "Changing the range reloads the table with orders for that range.",
+        "The caption above the table names the selected range."
+      ],
+      "estimate": null,
+      "labels": ["dashboard"],
+      "related_files": ["src/api/orders.ts", "src/pages/Dashboard.tsx"],
+      "requirement_ids": ["R4"],
+      "status_in_code": "extends_existing"
+    },
+    {
+      "type": "Story",
+      "title": "Dashboard: export the orders shown as CSV",
+      "description": "Add an \"Export CSV\" button next to the date range filter. It downloads exactly the orders currently in the table for the selected range. High priority: finance asked for it twice.\n\nThere is no export today (src/pages/Dashboard.tsx lines 12-37). Depends on the date range filter.",
+      "acceptance_criteria": [
+        "An \"Export CSV\" button is shown next to the date range filter.",
+        "The CSV contains the same rows and columns as the table for the selected range.",
+        "The file name includes the selected date range.",
+        "The button is disabled when there are no orders."
+      ],
+      "estimate": null,
+      "labels": ["dashboard"],
+      "related_files": ["src/pages/Dashboard.tsx"],
+      "requirement_ids": ["R5"],
+      "status_in_code": "new"
+    },
+    {
+      "type": "Story",
+      "title": "Dashboard: empty state when there are no orders",
+      "description": "When there are no orders for the selected range, show an empty state with a short message instead of an empty table.\n\nToday src/pages/Dashboard.tsx lines 26-35 map over the orders with no empty branch.",
+      "acceptance_criteria": [
+        "With zero orders, the table body is replaced by a short message.",
+        "The message mentions the selected date range.",
+        "With one or more orders, the table shows as before."
+      ],
+      "estimate": null,
+      "labels": ["dashboard"],
+      "related_files": ["src/pages/Dashboard.tsx"],
+      "requirement_ids": ["R6"],
+      "status_in_code": "new"
+    },
+    {
+      "type": "Task",
+      "title": "Login: show/hide password toggle (already implemented)",
+      "description": "The meeting was unsure whether the show/hide password toggle from the design exists. It does: src/pages/Login.tsx line 8 keeps showPassword state and lines 31-38 switch the input type with a Show/Hide button. Only check that it matches the design.",
+      "acceptance_criteria": ["The existing toggle matches the Figma design (label, placement)."],
+      "estimate": null,
+      "labels": ["login"],
+      "related_files": ["src/pages/Login.tsx"],
+      "requirement_ids": ["R2"],
+      "status_in_code": "already_done"
+    }
+  ]
+}

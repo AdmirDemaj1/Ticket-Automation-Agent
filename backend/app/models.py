@@ -88,8 +88,73 @@ def _default_issue_types() -> list[TicketType]:
 class RunInputs(BaseModel):
     """What the user chose for a run. Contains no secrets."""
 
-    repo: str
-    branch: str
-    jira_project_key: str
-    issue_types: list[TicketType] = Field(default_factory=_default_issue_types)
+    repo: str = Field(min_length=1)
+    branch: str = Field(min_length=1)
+    jira_project_key: str = Field(min_length=1)
+    issue_types: list[TicketType] = Field(default_factory=_default_issue_types, min_length=1)
     sprint_id: int | None = None
+
+
+# ---------- LLM outputs (one wrapper object per prompt) ----------
+
+
+class ScreenSummary(BaseModel):
+    screen: str = Field(description="Screen name, or 'Unassigned' when unclear")
+    feedback: list[str]
+    decisions: list[str]
+    actions: list[str]
+    open_questions: list[str]
+
+
+class MeetingAnalysis(BaseModel):
+    screens: list[ScreenSummary]
+    parked: list[str] = Field(description="Items explicitly postponed or rejected")
+    notes: list[str] = Field(description="Ambiguities, e.g. statements with an unclear screen")
+
+
+class RequirementList(BaseModel):
+    requirements: list[Requirement]
+
+
+class CodePlan(BaseModel):
+    paths: list[str] = Field(description="Repository paths to read, most relevant first")
+
+
+class FindingList(BaseModel):
+    findings: list[CodeFinding]
+
+
+class TicketDraftOut(BaseModel):
+    """A draft as the model writes it. Ids and selection are set by code."""
+
+    type: TicketType
+    title: str
+    description: str
+    acceptance_criteria: list[str]
+    estimate: str | None
+    labels: list[str]
+    related_files: list[str]
+    requirement_ids: list[str]
+    status_in_code: Literal["new", "extends_existing", "already_done"]
+
+
+class DraftList(BaseModel):
+    drafts: list[TicketDraftOut]
+
+
+# ---------- review and results ----------
+
+
+class ReviewDecision(BaseModel):
+    """The value the graph resumes with. Built by the API from saved drafts only."""
+
+    decision: Literal["approve", "reject"]
+    drafts: list[TicketDraft] = Field(default_factory=list)
+
+
+class CreatedTicket(BaseModel):
+    temp_id: str
+    key: str | None = None
+    url: str | None = None
+    existed: bool = False
+    error: str | None = None

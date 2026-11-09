@@ -1,0 +1,52 @@
+{
+  "requirements": [
+    {
+      "id": "R1",
+      "title": "Add a \"Forgot password?\" link and reset page",
+      "detail": "Show a \"Forgot password?\" link under the password field on Login. It opens a reset page where the user enters their email. The backend reset endpoint already exists; only the UI is needed.",
+      "screen": "Login",
+      "source_quote": "We need a \"Forgot password?\" link under the password field.",
+      "priority_hint": "high"
+    },
+    {
+      "id": "R2",
+      "title": "Show/hide password toggle",
+      "detail": "The password field has a toggle to show or hide the password, as in the design.",
+      "screen": "Login",
+      "source_quote": "The show and hide password toggle in the design, do we have that already?",
+      "priority_hint": null
+    },
+    {
+      "id": "R3",
+      "title": "Show login errors inline under the field",
+      "detail": "A wrong email or password shows an inline error in red text under the field instead of the top banner. The banner remains only for network errors.",
+      "screen": "Login",
+      "source_quote": "The design puts the error inline, right under the field, in red text.",
+      "priority_hint": null
+    },
+    {
+      "id": "R4",
+      "title": "Add a date range filter to the orders table",
+      "detail": "Above the orders table, a filter with last 7 days, 30 days, 90 days and a custom range with two date pickers. Default is 7 days. The orders API call needs a range parameter instead of the hardcoded 7 days.",
+      "screen": "Dashboard",
+      "source_quote": "We need a date range filter on top of the table: last 7 days, 30 days, 90 days, and a custom range with two date pickers.",
+      "priority_hint": null
+    },
+    {
+      "id": "R5",
+      "title": "Export orders as CSV",
+      "detail": "An \"Export CSV\" button next to the date filter exports exactly the orders shown in the table for the selected range.",
+      "screen": "Dashboard",
+      "source_quote": "And an \"Export CSV\" button next to the filter. It exports exactly what's in the table for the selected range. High priority, finance asked twice.",
+      "priority_hint": "high"
+    },
+    {
+      "id": "R6",
+      "title": "Empty state when there are no orders",
+      "detail": "When there are no orders for the selected range, show an empty state with a short message instead of an empty table.",
+      "screen": "Dashboard",
+      "source_quote": "Add an empty state with a short message.",
+      "priority_hint": null
+    }
+  ]
+}

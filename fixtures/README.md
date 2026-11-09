@@ -5,6 +5,7 @@ Used by the fake providers and by tests. Everything here is made up.
 - `repo/`: a tiny "demo-app" served by `FakeCodeProvider` as repository `fixtures/demo-app`, branch `main`.
 - `transcript.vtt`: a design review of the demo app's Login and Dashboard screens.
 - `screenshots/`: two Figma-style mockups referenced in the meeting (01 Login, 02 Dashboard).
+- `llm/`: one JSON response per LLM step, replayed by the fake LLM (`LLM_PROVIDER=fake`). Written by hand to match the table below; evidence cites real lines in `repo/`. Not recordings of Claude.
 
 What the meeting asks for, and what the repo already has (useful for checking results):
 

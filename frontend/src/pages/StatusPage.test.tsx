@@ -8,7 +8,12 @@ import { StatusPage } from './StatusPage';
 afterEach(() => vi.unstubAllGlobals());
 
 const config: ConfigStatus = {
-  llm: { model: 'claude-opus-5-5', api_key_set: false, max_tokens_per_run: 300000 },
+  llm: {
+    provider: 'fake',
+    model: 'claude-opus-5-5',
+    api_key_set: false,
+    max_tokens_per_run: 300000,
+  },
   code: { provider: 'fake', base_url: null },
   jira: { provider: 'fake', base_url: null },
   limits: {
