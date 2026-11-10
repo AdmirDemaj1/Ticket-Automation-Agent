@@ -56,7 +56,7 @@ Edit `.env`. The backend refuses to start and lists what is missing if a provide
   - Before a run starts, the app checks the project's required fields. If Jira requires fields it cannot fill (for example *Team* or *Components*), it says which ones, per issue type, and creates nothing.
   - Descriptions are sent in Atlassian Document Format, with acceptance criteria as a bullet list.
   - Every issue gets the labels `mtj-<run id>` and `mtj-<run id>-<draft id>`; approving again skips issues that exist.
-  - Pick a sprint on New run or when approving (scrum boards only; `JIRA_SPRINTS_ENABLED=false` turns this off). If adding to the sprint fails, the issues stay in the backlog and the run says why.
+  - Pick a sprint on New run or when approving (boards with sprints, company- or team-managed; `JIRA_SPRINTS_ENABLED=false` turns this off). If adding to the sprint fails, the issues stay in the backlog and the run says why.
 
 ## Develop
 

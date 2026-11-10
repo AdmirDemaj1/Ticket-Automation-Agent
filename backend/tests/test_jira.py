@@ -140,7 +140,7 @@ async def test_find_by_label_pages_with_next_token(jira_site: MockJira) -> None:
     assert not jira_site.calls("GET", "/rest/api/3/search")[0].url.path.endswith("/search")
 
 
-async def test_sprints_from_scrum_boards_only(jira_site: MockJira) -> None:
+async def test_sprints_from_boards_that_have_them(jira_site: MockJira) -> None:
     sprints = await _jira().list_sprints("A3")
     assert [(s.id, s.state, s.board) for s in sprints] == [
         (6, "active", "A3 board"),

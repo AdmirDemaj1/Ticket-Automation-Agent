@@ -114,14 +114,20 @@ class JiraCloudProvider:
             )
             sprints: dict[int, Sprint] = {}
             for board in boards.get("values", []):
-                if board.get("type") != "scrum":
-                    continue  # kanban boards have no sprints
-                data = await self._get(
-                    client,
-                    f"/rest/agile/1.0/board/{int(board['id'])}/sprint",
-                    {"state": "active,future", "maxResults": str(PAGE)},
-                    f"sprints of board {board.get('name', board['id'])}",
-                )
+                # Company-managed scrum boards are "scrum", team-managed ones "simple" (and
+                # may have sprints enabled). Kanban boards never have sprints.
+                if board.get("type") == "kanban":
+                    continue
+                try:
+                    data = await self._get(
+                        client,
+                        f"/rest/agile/1.0/board/{int(board['id'])}/sprint",
+                        {"state": "active,future", "maxResults": str(PAGE)},
+                        f"sprints of board {board.get('name', board['id'])}",
+                    )
+                except ProviderError as e:
+                    log.info("board %s has no sprints: %s", board.get("id"), e)
+                    continue  # e.g. a team-managed board with sprints turned off
                 for s in data.get("values", []):
                     sprints.setdefault(
                         int(s["id"]),

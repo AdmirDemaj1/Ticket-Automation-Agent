@@ -120,7 +120,7 @@ Checked against Atlassian's published OpenAPI specs (platform v3 and Agile 1.0) 
 - **Create.** `POST /rest/api/3/issue/bulk`, at most 50 per call. 201 means some succeeded, 400 means all failed; per-item errors are mapped by `failedElementNumber`, so one failing ticket is reported and the others are created. Unknown issue types are rejected locally. Creates are retried only on 429 (nothing was processed); a 5xx or timeout is reported, not retried, because issues may already exist.
 - **Idempotency.** One search for `project = KEY AND labels = "mtj-<run>"`, matched to drafts by their `mtj-<run>-<temp_id>` label. Because Jira's search can lag behind recent writes (documented), Jira keys already stored in the local `drafts` table also count as existing.
 - **Descriptions** are converted to ADF: paragraphs, hard breaks, bullet lists, and a bold line before a list. Text is never parsed as markup.
-- **Sprints** (`JIRA_SPRINTS_ENABLED`, default on): boards from `/rest/agile/1.0/board?projectKeyOrId=`, sprints in state `active,future` from scrum boards only (kanban boards have none), add with `POST /rest/agile/1.0/sprint/{id}/issue` in chunks of 50. The sprint can be chosen on New run and changed in the approve dialog; an explicit "no sprint" at approval wins. A failure leaves issues in the backlog and is shown on the run.
+- **Sprints** (`JIRA_SPRINTS_ENABLED`, default on): boards from `/rest/agile/1.0/board?projectKeyOrId=`, sprints in state `active,future` from every non-kanban board (team-managed boards report type `simple` and can have sprints; a board that refuses the sprint call is skipped), add with `POST /rest/agile/1.0/sprint/{id}/issue` in chunks of 50. The sprint can be chosen on New run and changed in the approve dialog; an explicit "no sprint" at approval wins. A failure leaves issues in the backlog and is shown on the run.
 - Not built: retrying only the failed tickets of a completed run. Approving again is not possible once the run is completed, so a failed ticket has to be created by hand for now.
 
 ## VERIFY items
@@ -130,7 +130,7 @@ Checked against Atlassian's published OpenAPI specs (platform v3 and Agile 1.0) 
 | SQLite checkpointer package and class (5) | Resolved (M2): package `langgraph-checkpoint-sqlite` 3.1, class `langgraph.checkpoint.sqlite.aio.AsyncSqliteSaver` (`from_conn_string`) |
 | GitLab token scope for the tree endpoint (6.2) | Deferred: GitLab is not built yet (D16) |
 | How the new createmeta endpoints mark required fields (6.3) | Resolved (M4): each field has `required` and `hasDefaultValue` (D19) |
-| API-token Basic auth on Agile (sprint) endpoints (6.3) | Open: the spec does not say; confirm on the first run against a real site |
+| API-token Basic auth on Agile (sprint) endpoints (6.3) | Resolved (2026-11-10): works on the user's site (`/rest/agile/1.0/board` and `/board/{id}/sprint`, read-only check) |
 | LangGraph `interrupt` / `Command(resume=...)` API (7.2) | Resolved (M2): `from langgraph.types import interrupt, Command` in langgraph 1.2; resume re-runs the node from its start; tested across a checkpointer restart |
 | GitHub fine-grained token permission for trees and contents (6.2) | Docs pages do not state it; *Contents: Read-only* is GitHub's documented permission for repository contents. Confirm on the first real run |
 | Anthropic structured outputs usage (7.3) | Resolved (M2): see D11. Checked against the installed SDK only; no call to the real API has been made yet |

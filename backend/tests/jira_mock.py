@@ -116,14 +116,19 @@ class MockJira:
             200,
             json={
                 "values": [
-                    {"id": 2, "name": "A3 board", "type": "scrum"},
+                    {"id": 2, "name": "A3 board", "type": "simple"},  # team-managed
                     {"id": 3, "name": "A3 kanban", "type": "kanban"},
+                    {"id": 4, "name": "No sprints", "type": "simple"},
                 ]
             },
         )
 
     def _sprints(self, request: httpx.Request, bid: str) -> httpx.Response:
-        assert bid == "2", "kanban boards must not be asked for sprints"
+        assert bid != "3", "kanban boards must not be asked for sprints"
+        if bid == "4":
+            return httpx.Response(
+                400, json={"errorMessages": ["The board does not support sprints"]}
+            )
         return httpx.Response(
             200,
             json={
